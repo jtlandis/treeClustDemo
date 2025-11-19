@@ -12,8 +12,8 @@
 #' @param which_tree identifies which element of `node` maps to which hclust
 #' tree in the `tree` attribute
 #' @param tree a list of `hclust` objects
-#' @node_encoding character scalar of how this object's node is encoded. The
-#' default, "order", will encode nodes according to how observations are
+#' @param node_encoding character scalar of how this object's node is encoded.
+#' The default, "order", will encode nodes according to how observations are
 #' ordered in the respective `hclust` object. The alternative, "observation",
 #' will encode nodes according to the original observation indices used to
 #' generate the hclust object. These options only affect leaf nodes, as
@@ -262,45 +262,45 @@ as.character.tree_vctr <- function(x) {
 
 
 
-.on_load <- function(ns) {
-  box::register_S3_method(name = "format", class = "tree_vctr", format.tree_vctr)
-  box::register_S3_method(name = "obj_print_footer", class = "tree_vctr", obj_print_footer.tree_vctr)
-  box::register_S3_method(name = "vec_restore", "tree_vctr", vec_restore.tree_vctr)
-  # box::register_S3_method(name = "vec_ptype2", "tree_vctr.tree_vctr", vec_ptype2.tree_vctr.tree_vctr)
-  box::register_S3_method(name = "vec_cast", "tree_vctr.tree_vctr", vec_cast.tree_vctr.tree_vctr)
-  # box::register_S3_method(name = "vec_cast", "tree_vctr.partial_tree_vctr", vec_cast.tree_vctr.partial_tree_vctr)
-  # box::register_S3_method(name = "vec_cast", "partial_tree_vctr.tree_vctr", vec_cast.partial_tree_vctr.tree_vctr)
-  box::register_S3_method(
-    name = "group_by_inner", "data.frame", group_by_inner.data.frame
-  )
-  box::register_S3_method(
-    name = "as.character", "tree_vctr", as.character.tree_vctr
-  )
-  box::register_S3_method(
-    name = "vec_ptype", "tree_vctr", vec_ptype.tree_vctr
-  )
-  box::register_S3_method(
-    name = "vec_ptype_finalise", "tree_vctr_ptype", vec_ptype_finalise.tree_vctr_ptype
-  )
-  box::register_S3_method(
-    name = "vec_ptype2", "tree_vctr_ptype.tree_vctr_ptype", vec_ptype2.tree_vctr_ptype.tree_vctr_ptype
-  )
-  # box::register_S3_method(
-  #   name = "vec_ptype2", "tree_vctr.partial_tree_vctr", vec_ptype2.tree_vctr.partial_tree_vctr
-  # )
-  # box::register_S3_method(
-  #   name = "vec_ptype2", "partial_tree_vctr.tree_vctr", vec_ptype2.partial_tree_vctr.tree_vctr
-  # )
-  # box::register_S3_method(
-  #   name = "vec_proxy_equal", "tree_vctr",
-  #   vec_proxy_equal.tree_vctr
-  # )
-  # box::register_S3_method(
-  #   name = "vec_proxy_compare", "tree_vctr",
-  #   vec_proxy_compare.tree_vctr
-  # )
-}
+# .on_load <- function(ns) {
+#   box::register_S3_method(name = "format", class = "tree_vctr", format.tree_vctr)
+#   box::register_S3_method(name = "obj_print_footer", class = "tree_vctr", obj_print_footer.tree_vctr)
+#   box::register_S3_method(name = "vec_restore", "tree_vctr", vec_restore.tree_vctr)
+#   # box::register_S3_method(name = "vec_ptype2", "tree_vctr.tree_vctr", vec_ptype2.tree_vctr.tree_vctr)
+#   box::register_S3_method(name = "vec_cast", "tree_vctr.tree_vctr", vec_cast.tree_vctr.tree_vctr)
+#   # box::register_S3_method(name = "vec_cast", "tree_vctr.partial_tree_vctr", vec_cast.tree_vctr.partial_tree_vctr)
+#   # box::register_S3_method(name = "vec_cast", "partial_tree_vctr.tree_vctr", vec_cast.partial_tree_vctr.tree_vctr)
+#   box::register_S3_method(
+#     name = "group_by_inner", "data.frame", group_by_inner.data.frame
+#   )
+#   box::register_S3_method(
+#     name = "as.character", "tree_vctr", as.character.tree_vctr
+#   )
+#   box::register_S3_method(
+#     name = "vec_ptype", "tree_vctr", vec_ptype.tree_vctr
+#   )
+#   box::register_S3_method(
+#     name = "vec_ptype_finalise", "tree_vctr_ptype", vec_ptype_finalise.tree_vctr_ptype
+#   )
+#   box::register_S3_method(
+#     name = "vec_ptype2", "tree_vctr_ptype.tree_vctr_ptype", vec_ptype2.tree_vctr_ptype.tree_vctr_ptype
+#   )
+#   # box::register_S3_method(
+#   #   name = "vec_ptype2", "tree_vctr.partial_tree_vctr", vec_ptype2.tree_vctr.partial_tree_vctr
+#   # )
+#   # box::register_S3_method(
+#   #   name = "vec_ptype2", "partial_tree_vctr.tree_vctr", vec_ptype2.partial_tree_vctr.tree_vctr
+#   # )
+#   # box::register_S3_method(
+#   #   name = "vec_proxy_equal", "tree_vctr",
+#   #   vec_proxy_equal.tree_vctr
+#   # )
+#   # box::register_S3_method(
+#   #   name = "vec_proxy_compare", "tree_vctr",
+#   #   vec_proxy_compare.tree_vctr
+#   # )
+# }
 
-if (is.null(box::name())) {
-  box::use(. / `__test_tree_vctr__`)
-}
+# if (is.null(box::name())) {
+#   box::use(. / `__test_tree_vctr__`)
+# }
