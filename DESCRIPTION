@@ -17,3 +17,7 @@ Imports:
     plyxp,
     SummarizedExperiment,
     vctrs
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
