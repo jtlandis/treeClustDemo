@@ -13,6 +13,7 @@ Imports:
     digest,
     dplyr,
     GenomicRanges,
+    ggplot2,
     plyxp,
     SummarizedExperiment,
     vctrs

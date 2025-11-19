@@ -1,7 +1,7 @@
 #' @export
 as.data.frame.tree_vec <- function(x, ...) {
   data <- with_tree_vctr(
-    encode_obsv(tree_vec),
+    encode_obsv(x),
     function(nodes, tree) {
       merge <- tree$merge
       n <- length(tree$order)
@@ -36,20 +36,20 @@ as.data.frame.tree_vec <- function(x, ...) {
       data[nodes, ]
     }
   )
-  dplyr::bind_cols(nodes = tree_vec, data, ...)
+  dplyr::bind_cols(nodes = x, data, ...)
 }
 
 
 #' @export
 plot_tree_vctr_data <- function(data, ...) {
-  ggplot(data, aes(x, y, ...)) +
-    geom_point() +
-    geom_segment(
-      aes(yend = y_end),
+  ggplot2::ggplot(data, ggplot2::aes(x, y, ...)) +
+    ggplot2::geom_point() +
+    ggplot2::geom_segment(
+      ggplot2::aes(yend = y_end),
       ~ subset(.x, !is.na(y_end))
     ) +
-    geom_segment(
-      aes(x = x_start, xend = x_end),
+    ggplot2::geom_segment(
+      ggplot2::aes(x = x_start, xend = x_end),
       ~ subset(.x, !is.na(x_end))
     )
 }
@@ -58,5 +58,5 @@ plot_tree_vctr_data <- function(data, ...) {
 autoplot.tree_vctr <- function(object, ..., .other_data = list()) {
   plot_tree_vctr_data(
     as.data.frame(object, !!!.other_data), ...
-  ) + facet_wrap(~ tree_id(nodes), scales = "free_x")
+  ) + ggplot2::facet_wrap(~ tree_id(nodes), scales = "free_x")
 }
