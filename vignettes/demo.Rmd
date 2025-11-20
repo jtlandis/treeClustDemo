@@ -118,6 +118,29 @@ fmt_log <- function(nums, digits = 0) {
   sprintf(template, sign, abs(nums))
 }
 
+#' @param object a dds object that had been predicted
+#' @param new_data a different dds object that will take the priors of `object`
+#' @param coef string indicating the coef design to use for shrinkage
+#' @param type glm type.
+#' @export
+predict_dds <- function(object, new_data, coef, type = "apeglm") {
+  sizeFactors(new_data) <- sizeFactors(object)
+  new_data <- estimateDispersionsGeneEst(new_data)
+  dispersionFunction(new_data) <- dispersionFunction(object)
+  new_data <- estimateDispersionsMAP(new_data) |>
+    nbinomWaldTest()
+
+  res <- lfcShrink(object, coef = coef, type = type)
+  pc <- attr(res, "priorInfo")$prior.control
+  res <- lfcShrink(new_data,
+    coef = coef,
+    type = type, apeAdapt = FALSE, prior.control = pc
+  )
+  metadata(new_data)$shrink_results <- res
+  new_data
+}
+```
+<!--
 ## -- main
 
 
@@ -140,44 +163,58 @@ fmt_log <- function(nums, digits = 0) {
 # # simple_range
 #    user  system elapsed
 #   5.664   1.229   7.090
+-->
+
+```{r}
+res <- dds |>
+  new_plyxp() |>
+  mutate(rows(
+    simple_exons = simple_range(exons),
+    n_children = 1L
+  )) |>
+  group_by(rows(gene_id)) |>
+  mutate(
+    rows(
+      n_transcript = n(),
+      cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf))
+    )
+  ) |>
+  mutate(
+    rows(
+      n_transcript = n(),
+      cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf))
+    )
+  ) |>
+  filter(rows(!is.na(cut_n_transcript))) |>
+  mutate(
+    rows(
+      nodes = cluster_data(simple_exons, similarity_method = "basepair") |>
+        as_tree_vctr()
+    )
+  ) |>
+  arrange(rows(nodes))
+
+print(res)
+
+```
 
 
-system.time({
-  res <- glinos$dds |>
-    new_plyxp() |>
-    mutate(rows(
-      simple_exons = simple_range(exons),
-      n_children = 1L
-    )) |>
-    group_by(rows(gene_id)) |>
-    mutate(
-      rows(
-        n_transcript = n(),
-        cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf))
-      )
-    ) |>
-    filter(rows(!is.na(cut_n_transcript))) |>
-    mutate(
-      rows(
-        nodes = cluster_data(simple_exons, similarity_method = "basepair") |>
-          as_tree_vctr()
-      )
-    ) |>
-    arrange(rows(nodes))
-})
-
-pull(res, rows(nodes))
+```{r}
 
 inner_nodes <- summarize_by_inner(res,
   across(everything(), colSums),
   rows(n_children = n()),
   .by = rows(nodes)
 )
-inner_nodes <- glinos$predict_dds(
-  se(res),
+
+inner_nodes <- plyxp(
+  res,
+  predict_dds,
   new_data = DESeq2::DESeqDataSet(se(inner_nodes),
     design = design(se(res))
   ),
-  coef = "condition_WT_vs_KD", type = "apeglm"
-) |> new_plyxp()
+  coef = "condition_WT_vs_KD",
+  type = "apeglm"
+)
+print(inner_nodes)
 ```

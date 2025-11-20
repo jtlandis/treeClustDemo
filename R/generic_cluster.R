@@ -108,7 +108,7 @@ with_exons <- function(list_obj, with) {
   n_exons <- length(chrom_exons)
   mat <- Matrix::sparseMatrix(
     seq_len(n_exons),
-    vctrs::vec_rep(seq_len(n_transcripts), lengths(list_obj)),
+    base::rep(seq_len(n_transcripts), lengths(list_obj)),
     x = 1L,
     dimnames = list(NULL, names(list_obj))
   )

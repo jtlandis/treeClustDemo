@@ -1,23 +1,27 @@
 #' Supported Classes
 #' @name supported_classes
-#' Possible classes to dispatch on
+#' @description Possible classes to dispatch on
 NULL
 
 #' @rdname supported_classes
 #' @export
-GR <- methods::getClass("GenomicRanges")
+GR <- methods::getClass("GenomicRanges", where = "GenomicRanges")
 
 #' @rdname supported_classes
 #' @export
-GRL <- methods::getClass("GenomicRangesList")
+GRL <- methods::getClass("GenomicRangesList", where = "GenomicRanges")
 
 #' @rdname supported_classes
 #' @export
-SE <- methods::getClass("SummarizedExperiment")
+SE <- methods::getClass("SummarizedExperiment",
+  where = "SummarizedExperiment"
+)
 
 #' @rdname supported_classes
 #' @export
-RSE <- methods::getClass("RangedSummarizedExperiment")
+RSE <- methods::getClass("RangedSummarizedExperiment",
+  where = "SummarizedExperiment"
+)
 
 
 #' @rdname suppoted_classes
@@ -62,6 +66,25 @@ names.simple_range <- function(x) {
     vctrs::field(x, "NAMES")
   } else {
     NULL
+  }
+}
+
+#' @export
+`names<-.simple_range` <- function(x, value) {
+  if (is.null(value)) {
+    new_simple_range(
+      vctrs::field(x, "start"),
+      vctrs::field(x, "stop")
+    )
+  } else {
+    value <- vctrs::vec_cast(value, character())
+    x <- new_simple_range(
+      vctrs::field(x, "start"),
+      vctrs::field(x, "stop"),
+      character(vctrs::vec_size(x))
+    )
+    vctrs::field(x, "NAMES") <- value
+    x
   }
 }
 
