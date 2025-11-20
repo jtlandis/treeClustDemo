@@ -14,7 +14,10 @@ Imports:
     dplyr,
     GenomicRanges,
     ggplot2,
+    IRanges,
+    Matrix,
     plyxp,
+    S7,
     SummarizedExperiment,
     vctrs
 Suggests: 
