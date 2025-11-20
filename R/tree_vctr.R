@@ -19,6 +19,24 @@
 #' generate the hclust object. These options only affect leaf nodes, as
 #' internal nodes will always be encoded by the height of the hclust.
 #' @export
+
+new_pure_tree_vctr <- function(
+  node = integer(),
+  which_tree = factor(),
+  tree = list(),
+  node_encoding = c("order", "observation")
+) {
+  vctrs::new_rcrd(
+    fields = list(
+      which_tree = which_tree,
+      node = node
+    ),
+    tree = tree,
+    node_encoding = match.arg(node_encoding, c("order", "observation")),
+    class = "tree_vctr"
+  )
+}
+
 new_tree_vctr <- function(
   node = integer(),
   which_tree = integer(),
@@ -45,19 +63,13 @@ new_tree_vctr <- function(
   )
   tree <- lapply(tree, with_descendants)
   hashes <- vctrs::vec_unique(vapply(tree, digest::digest, ""))
-  class <- "tree_vctr"
-
-  vctrs::new_rcrd(
-    fields = list(
-      which_tree = vctrs::new_factor(which_tree, levels = hashes),
-      node = node
-    ),
+  new_pure_tree_vctr(
+    node = node,
+    which_tree = vctrs::new_factor(which_tree, levels = hashes),
     tree = tree,
-    node_encoding = match.arg(node_encoding, c("order", "observation")),
-    class = class
+    node_encoding = node_encoding
   )
 }
-
 
 
 #' @export
@@ -97,69 +109,68 @@ obj_print_footer.tree_vctr <- function(x, ...) {
   )
 }
 
-.tree_registry <- new.env(parent = emptyenv())
+# .tree_registry <- new.env(parent = emptyenv())
 
-register_tree <- function(tree) {
-  tree_hash <- digest::digest(tree)
-  if (is.null(.tree_registry[[tree_hash]])) {
-    .tree_registry[[tree_hash]] <- tree
-  }
-  tree_hash
-}
+# register_tree <- function(tree) {
+#   tree_hash <- digest::digest(tree)
+#   if (is.null(.tree_registry[[tree_hash]])) {
+#     .tree_registry[[tree_hash]] <- tree
+#   }
+#   tree_hash
+# }
 
-unregister_hash <- function(hash) {
-  val <- .tree_registry[[hash]]
-  if (is.null(val)) {
-    stop(
-      sprintf(
-        "cannot find hash %s. was it possible these were called out of order?",
-        hash
-      )
-    )
-  }
-  rm(list = hash, envir = .tree_registry)
-  val
-}
+# unregister_hash <- function(hash) {
+#   val <- .tree_registry[[hash]]
+#   if (is.null(val)) {
+#     stop(
+#       sprintf(
+#         "cannot find hash %s. was it possible these were called out of order?",
+#         hash
+#       )
+#     )
+#   }
+#   rm(list = hash, envir = .tree_registry)
+#   val
+# }
 
-new_tree_vctr_ptype <- function(learned = character(), encoding = "order") {
-  vctrs::new_vctr(
-    integer(),
-    learned = learned,
-    encoding = encoding,
-    class = "tree_vctr_ptype"
-  )
-}
+# new_tree_vctr_ptype <- function(learned = character(), encoding = "order") {
+#   vctrs::new_vctr(
+#     integer(),
+#     learned = learned,
+#     encoding = encoding,
+#     class = "tree_vctr_ptype"
+#   )
+# }
 
 
-into_tree_vctr_ptype <- function(tree_vec) {
-  new_tree_vctr_ptype(
-    learned = vapply(trees(tree_vec), register_tree, ""),
-    encoding = node_encoding(tree_vec)
-  )
-}
+# into_tree_vctr_ptype <- function(tree_vec) {
+#   new_tree_vctr_ptype(
+#     learned = vapply(trees(tree_vec), register_tree, ""),
+#     encoding = node_encoding(tree_vec)
+#   )
+# }
 
-#' @importFrom vctrs vec_ptype
-#' @export
-vec_ptype.tree_vctr <- function(x, ...) {
-  into_tree_vctr_ptype(x)
-}
+# vec_ptype.tree_vctr <- function(x, ...) {
+#   into_tree_vctr_ptype(x)
+# }
 
-#' @importFrom vctrs vec_ptype_finalise
-#' @export
-vec_ptype_finalise.tree_vctr_ptype <- function(x, ...) {
-  learned <- vctrs::vec_unique(attr(x, "learned"))
-  tree <- lapply(learned, unregister_hash)
-  new_tree_vctr(
-    tree = tree,
-    node_encoding = attr(x, "encoding")
-  )
-}
+# @importFrom vctrs vec_ptype_finalise
+# @export
+# vec_ptype_finalise.tree_vctr_ptype <- function(x, ...) {
+#   learned <- vctrs::vec_unique(attr(x, "learned"))
+#   tree <- lapply(learned, unregister_hash)
+#   new_tree_vctr(
+#     tree = tree,
+#     node_encoding = attr(x, "encoding")
+#   )
+# }
 
 #' @importFrom vctrs vec_restore
 #' @export
 vec_restore.tree_vctr <- function(x, to, ...) {
   #
   if (vctrs::vec_size(x)) {
+    old_lvls <- levels(x$which_tree)
     # 4, 2, 3, 4, 2
     ints <- as.integer(x$which_tree)
     # 4, 2, 3
@@ -183,9 +194,9 @@ vec_restore.tree_vctr <- function(x, to, ...) {
       node_encoding = node_encoding(to)
     )
   } else {
-    new_tree_vctr(
+    new_pure_tree_vctr(
       node = x$node,
-      which_tree = as.integer(x$which_tree),
+      which_tree = x$which_tree,
       tree = trees(to),
       node_encoding = node_encoding(to)
     )
@@ -194,13 +205,18 @@ vec_restore.tree_vctr <- function(x, to, ...) {
 
 #' @importFrom vctrs vec_ptype2
 #' @export
-vec_ptype2.tree_vctr_ptype.tree_vctr_ptype <- function(x, y, ...) {
-  new_tree_vctr_ptype(
-    learned = vctrs::vec_c(
-      attr(x, "learned"), attr(y, "learned"),
-      .ptype = character()
+vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
+  xwt <- wt(x)
+  ywt <- wt(y)
+  new_which_tree <- vec_ptype2(xwt, ywt)
+  ykeep <- match(levels(new_which_tree), levels(ywt), nomatch = 0L)
+  new_pure_tree_vctr(
+    which_tree = new_which_tree,
+    tree = vctrs::vec_c(
+      trees(x), vctrs::vec_slice(trees(y), ykeep),
+      .ptype = list()
     ),
-    encoding = attr(x, "encoding")
+    node_encoding = node_encoding(x)
   )
 }
 
@@ -214,7 +230,7 @@ vec_cast.tree_vctr.tree_vctr <- function(x, to, ...) {
       vctrs::field(to, "which_tree")
     )
   )
-
+  # the tree attribute should already be correct???
   if (!identical(node_encoding(x), node_encoding(to))) {
     x <- swap_node_encoding(x)
   }

@@ -74,8 +74,8 @@ test_that("ptypes", {
   # )
 
   expect_identical(
-    vec_ptype2(xtree, ytree),
-    vec_ptype(merged_tree)
+    vctrs::vec_ptype2(xtree, ytree),
+    vctrs::vec_ptype(merged_tree)
   )
 })
 
