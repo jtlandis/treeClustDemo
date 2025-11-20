@@ -26,6 +26,8 @@ class_simple_range <- S7::new_S3_class("simple_range")
 
 class_nested_range <- S7::new_S3_class("nested_range")
 
+s4_simple_range <- methods::setOldClass("simple_range")
+
 
 new_simple_range <- function(start = integer(), stop = integer(), names = NULL) {
   vctrs::new_rcrd(
@@ -100,7 +102,7 @@ NULL
 #' @export
 methods::setMethod(
   "start",
-  "simple_range",
+  s4_simple_range,
   function(x, ...) {
     vctrs::field(x, "start")
   }
@@ -109,7 +111,7 @@ methods::setMethod(
 #' @export
 methods::setMethod(
   "end",
-  "simple_range",
+  s4_simple_range,
   function(x, ...) {
     vctrs::field(x, "stop")
   }

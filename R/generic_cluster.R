@@ -29,7 +29,14 @@ cluster_data <- new_generic(
   "cluster_data",
   "data",
   fun = function(data,
-                 similarity_method = c("basepair_sorensen", "basepair_max_union", "basepair", "exon_sorensen", "exon"),
+                 similarity_method = c(
+                   "basepair",
+                   "basepair_sorensen",
+                   "basepair_max-union",
+                   "percent",
+                   "percent_sorensen",
+                   "percent_max-union"
+                 ),
                  dist_method = "euclidean",
                  clust_method = "complete", name = NULL) {
     S7_dispatch()
