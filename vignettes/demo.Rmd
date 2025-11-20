@@ -19,19 +19,84 @@ library(treeClustDemo)
 ```
 
 ```{r}
-box::use(
-  mods / datasets / glinos
+library(plyxp)
+xp <- new_plyxp(glinos)
+xp <- xp |>
+  mutate(
+    rows(
+      gene = stringr::str_replace(gene_id, "\\.\\d+", ""),
+      symbol = AnnotationDbi::mapIds(
+        org.Hs.eg.db::org.Hs.eg.db, gene,
+        "SYMBOL", "ENSEMBL"
+      ),
+      symbol = dplyr::case_when(
+        is.na(symbol) ~ gene,
+        TRUE ~ symbol
+      )
+    )
+  )
+head(table(table(rowData(xp)$gene_id)))
+```
+
+```{r filter multi-transcript genes}
+xp <- xp |>
+  group_by(rows(gene_id)) |>
+  filter(rows(n() > 1)) |>
+  ungroup() |>
+  arrange(rows(gene_id))
+
+head(table(table(rowData(xp)$gene_id)))
+```
+
+```{r compute satuRn DTU}
+se <- se(xp)
+se <- satuRn::fitDTU(se, formula = ~ 0 + condition)
+design <- model.matrix(~ 0 + condition, colData(se))
+colnames(design)
+colnames(design) <- levels(se$condition)
+L <- limma::makeContrasts(
+  WT_vs_KD = WT - KD,
+  levels = design
 )
 
-box::use(dplyr[...], plyxp[...], ggplot2[...])
-## should use 1.5.3
-packageVersion("plyxp")
-box::use(
-  SummarizedExperiment[...]
+strn <- satuRn::testDTU(
+  object = se,
+  contrasts = L,
+  diagplot1 = FALSE,
+  diagplot2 = FALSE
 )
-box::use(mods / similarity[...])
-box::use(mods / tree[...])
-box::use(mods / sims[...])
+
+```
+
+# Computing DESeq2
+
+```{r count split with plyxp}
+library(DESeq2)
+dds <- strn |>
+  new_plyxp() |>
+  mutate(
+    train = rbinom(n(), counts, prob = 0.5),
+    test = as.integer(counts - train)
+  ) |>
+  plyxp(
+    DESeqDataSet,
+    design = ~condition
+  )
+
+# estimate sizeFactors on original counts
+dds <- plyxp(dds, estimateSizeFactors) |>
+  # before computing DESeq, make "counts"
+  # into training data
+  mutate(
+    old_counts = counts,
+    counts = train
+  ) |>
+  # run DESeq2 where counts == train
+  plyxp(DESeq)
+```
+
+```{r}
+
 
 ## helpers ---
 
