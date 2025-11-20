@@ -23,8 +23,10 @@ Imports:
     vctrs
 Suggests:
     knitr,
-    rmarkdown
+    rmarkdown,
+    testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Depends:
     R (>= 3.5)
 LazyData: true
+Config/testthat/edition: 3

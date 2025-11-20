@@ -102,7 +102,7 @@ dds <- plyxp(dds, estimateSizeFactors) |>
 
 select_common_rows <- function(se, common_rows) {
   new_plyxp(se) |>
-    select(rows(all_of(common_names)), everything(), cols(-replaceable)) |>
+    select(rows(all_of(common_names)), everything(), cols(everything())) |>
     se()
 }
 
@@ -176,13 +176,8 @@ res <- dds |>
   mutate(
     rows(
       n_transcript = n(),
-      cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf))
-    )
-  ) |>
-  mutate(
-    rows(
-      n_transcript = n(),
-      cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf))
+      cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf),
+        include.lowest = TRUE)
     )
   ) |>
   filter(rows(!is.na(cut_n_transcript))) |>
@@ -217,4 +212,12 @@ inner_nodes <- plyxp(
   type = "apeglm"
 )
 print(inner_nodes)
+```
+
+```{r}
+pull(res, rows(exons)) |> ranges() |> class() |> print()
+```
+
+```{r}
+print(names(colData(inner_nodes)))
 ```
