@@ -170,7 +170,7 @@ obj_print_footer.tree_vctr <- function(x, ...) {
 vec_restore.tree_vctr <- function(x, to, ...) {
   #
   if (vctrs::vec_size(x)) {
-    old_lvls <- levels(x$which_tree)
+    old_lvls <- levels(wt(to))
     # 4, 2, 3, 4, 2
     ints <- as.integer(x$which_tree)
     # 4, 2, 3
@@ -185,11 +185,15 @@ vec_restore.tree_vctr <- function(x, to, ...) {
     to_trees <- trees(to)
     if (!all(is.na(unique_tree_id))) {
       to_trees <- vctrs::vec_slice(trees(to), unique_tree_id)
+      old_lvls <- vctrs::vec_slice(old_lvls, unique_tree_id)
     }
-    new_tree_vctr(
+    new_pure_tree_vctr(
       node = x$node,
       # 3, 1, 2, 3, 1
-      which_tree = vctrs::vec_match(ints, unique_tree_id),
+      which_tree = vctrs::new_factor(
+        vctrs::vec_match(ints, unique_tree_id),
+        old_lvls
+      ),
       tree = to_trees,
       node_encoding = node_encoding(to)
     )
