@@ -19,24 +19,6 @@
 #' generate the hclust object. These options only affect leaf nodes, as
 #' internal nodes will always be encoded by the height of the hclust.
 #' @export
-
-new_pure_tree_vctr <- function(
-  node = integer(),
-  which_tree = factor(),
-  tree = list(),
-  node_encoding = c("order", "observation")
-) {
-  vctrs::new_rcrd(
-    fields = list(
-      which_tree = which_tree,
-      node = node
-    ),
-    tree = tree,
-    node_encoding = match.arg(node_encoding, c("order", "observation")),
-    class = "tree_vctr"
-  )
-}
-
 new_tree_vctr <- function(
   node = integer(),
   which_tree = integer(),
@@ -67,8 +49,29 @@ new_tree_vctr <- function(
     node = node,
     which_tree = vctrs::new_factor(which_tree, levels = hashes),
     tree = tree,
-    node_encoding = node_encoding
+    node_encoding = match.arg(node_encoding, c("order", "observation"))
   )
+}
+
+tree_vctr_class <- c("tree_vctr", "vctrs_rcrd", "vctrs_vctr")
+new_pure_tree_vctr <- function(
+  node = integer(),
+  which_tree = factor(),
+  tree = list(),
+  node_encoding = "order"
+) {
+  out <- list(
+    which_tree = which_tree,
+    node = node
+  )
+  # attributes(out) <- list(
+  #   names = c("which_tree", "node"),
+  #   tree = tree, class = tree_vctr_class
+  # )
+  attr(out, "tree") <- tree
+  attr(out, "node_encoding") <- node_encoding
+  class(out) <- tree_vctr_class
+  out
 }
 
 
@@ -213,14 +216,20 @@ vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
   xwt <- wt(x)
   ywt <- wt(y)
   new_which_tree <- vec_ptype2(xwt, ywt)
-  ykeep <- match(levels(new_which_tree), levels(ywt), nomatch = 0L)
+  ## an alternative way, its not much faster
+  ykeep <- match(
+    levels(new_which_tree),
+    levels(ywt)[!vctrs::vec_in(levels(ywt), levels(xwt))],
+    nomatch = 0L
+  )
   new_pure_tree_vctr(
     which_tree = new_which_tree,
     tree = vctrs::vec_c(
-      trees(x), vctrs::vec_slice(trees(y), ykeep),
+      ## again alternative way
+      attr(x, "tree"), vctrs::vec_slice(attr(y, "tree"), ykeep),
+      # attr(x, "tree"), attr(y, "tree"),
       .ptype = list()
-    ),
-    node_encoding = node_encoding(x)
+    )
   )
 }
 
