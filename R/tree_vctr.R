@@ -213,23 +213,29 @@ vec_restore.tree_vctr <- function(x, to, ...) {
 #' @importFrom vctrs vec_ptype2
 #' @export
 vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
-  xwt <- wt(x)
-  ywt <- wt(y)
-  new_which_tree <- vec_ptype2(xwt, ywt)
-  ## an alternative way, its not much faster
-  ykeep <- match(
-    levels(new_which_tree),
-    levels(ywt)[!vctrs::vec_in(levels(ywt), levels(xwt))],
-    nomatch = 0L
-  )
-  new_pure_tree_vctr(
-    which_tree = new_which_tree,
-    tree = vctrs::vec_c(
-      ## again alternative way
-      attr(x, "tree"), vctrs::vec_slice(attr(y, "tree"), ykeep),
-      # attr(x, "tree"), attr(y, "tree"),
+  xwt <- levels(vctrs::field(x, "which_tree"))
+  ywt <- levels(vctrs::field(y, "which_tree"))
+  ykeep <- which(!vctrs::vec_in(ywt, xwt))
+  xtree <- attr(x, "tree")
+  if (length(ykeep)) {
+    xwt <- vctrs::vec_c(xwt,
+      vctrs::vec_slice(ywt, ykeep),
+      .ptype = character()
+    )
+    xtree <- vctrs::vec_c(xtree,
+      vctrs::vec_slice(attr(y, "tree"), ykeep),
       .ptype = list()
     )
+  }
+  # opting for speed here
+  which_tree <- integer()
+  attributes(which_tree) <- list(
+    levels = xwt,
+    class = "factor"
+  )
+  new_pure_tree_vctr(
+    which_tree = which_tree,
+    tree = xtree
   )
 }
 
