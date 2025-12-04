@@ -54,6 +54,8 @@ new_tree_vctr <- function(
 }
 
 tree_vctr_class <- c("tree_vctr", "vctrs_rcrd", "vctrs_vctr")
+
+
 new_pure_tree_vctr <- function(
   node = integer(),
   which_tree = factor(),
@@ -168,47 +170,73 @@ obj_print_footer.tree_vctr <- function(x, ...) {
 #   )
 # }
 
-#' @importFrom vctrs vec_restore
-#' @export
-vec_restore.tree_vctr <- function(x, to, ...) {
-  #
-  if (vctrs::vec_size(x)) {
-    old_lvls <- levels(wt(to))
-    # 4, 2, 3, 4, 2
-    ints <- as.integer(x$which_tree)
-    # 4, 2, 3
-    unique_tree_id <- vctrs::vec_unique(ints)
-    # 2, 3, 1
-    unique_ord <- vctrs::vec_order(unique_tree_id)
-    # 2, 3, 4
-    unique_tree_id <- vctrs::vec_slice(
-      unique_tree_id,
-      unique_ord[!is.na(unique_ord)]
-    )
-    to_trees <- trees(to)
-    if (!all(is.na(unique_tree_id))) {
-      to_trees <- vctrs::vec_slice(trees(to), unique_tree_id)
-      old_lvls <- vctrs::vec_slice(old_lvls, unique_tree_id)
-    }
-    new_pure_tree_vctr(
-      node = x$node,
-      # 3, 1, 2, 3, 1
-      which_tree = vctrs::new_factor(
-        vctrs::vec_match(ints, unique_tree_id),
-        old_lvls
-      ),
-      tree = to_trees,
-      node_encoding = node_encoding(to)
-    )
-  } else {
-    new_pure_tree_vctr(
-      node = x$node,
-      which_tree = x$which_tree,
-      tree = trees(to),
-      node_encoding = node_encoding(to)
-    )
+
+tree_vctr_drop <- function(x) {
+  wt <- wt(x)
+  old_lvls <- levels(wt)
+  # 4, 2, 3, 4, 2
+  ints <- as.integer(wt)
+  # 4, 2, 3
+  unique_tree_id <- vctrs::vec_unique(ints)
+  # 2, 3, 1
+  unique_ord <- vctrs::vec_order(unique_tree_id)
+  # 2, 3, 4
+  unique_tree_id <- vctrs::vec_slice(
+    unique_tree_id,
+    unique_ord[!is.na(unique_ord)]
+  )
+  to_trees <- trees(x)
+  if (!all(is.na(unique_tree_id))) {
+    to_trees <- vctrs::vec_slice(trees(x), unique_tree_id)
+    old_lvls <- vctrs::vec_slice(old_lvls, unique_tree_id)
   }
+  new_pure_tree_vctr(
+    node = node_id(x),
+    # 3, 1, 2, 3, 1
+    which_tree = vctrs::new_factor(
+      vctrs::vec_match(ints, unique_tree_id),
+      old_lvls
+    ),
+    tree = to_trees,
+    node_encoding = node_encoding(x)
+  )
 }
+
+#' @export
+tree_vctr <- function(x) {
+  UseMethod("tree_vctr", x)
+}
+
+#' @export
+tree_vctr.tree_vctr <- function(x) {
+  tree_vctr_drop(x)
+}
+
+#' @export
+tree_vctr.hclust <- function(x) {
+  as_tree_vctr(x)
+}
+
+#' @export
+tree_vctr.default <- function(x) {
+  tree_vctr(as.hclust(x))
+}
+
+# #' @importFrom vctrs vec_restore
+# #' @export
+# vec_restore.tree_vctr <- function(x, to, ...) {
+#   #
+#   if (vctrs::vec_size(x)) {
+#
+#   } else {
+# new_pure_tree_vctr(
+#   node = x$node,
+#   which_tree = x$which_tree,
+#   tree = trees(to),
+#   node_encoding = node_encoding(to)
+# )
+#   }
+# }
 
 #' @importFrom vctrs vec_ptype2
 #' @export
@@ -235,7 +263,8 @@ vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
   )
   new_pure_tree_vctr(
     which_tree = which_tree,
-    tree = xtree
+    tree = xtree,
+    node_encoding = node_encoding(x)
   )
 }
 
@@ -257,8 +286,7 @@ vec_cast.tree_vctr.tree_vctr <- function(x, to, ...) {
 }
 
 
-#' @export
-as.character.tree_vctr <- function(x) {
+tree_labels <- function(x) {
   fn <- switch(node_encoding(x),
     observation = function(node, tree) {
       n <- length(tree$order)
@@ -282,20 +310,88 @@ as.character.tree_vctr <- function(x) {
       labels
     }
   )
-  labels <- with_tree_vctr(x, fn)
-  sprintf("%s-%i", labels, tree_id(x))
+  with_tree_vctr(x, fn)
 }
 
+leaf_labels <- function(tree) {
+  switch(node_encoding(tree),
+    observation = vctrs::vec_unchop(
+      mapply(
+        \(tree, i) {
+          n <- length(tree$order)
+          labels <- tree$labels
+          if (is.null(labels)) {
+            labels <- sprintf("obsv%i", seq_len(n))
+          }
+          sprintf("%s-%i", labels, i)
+        },
+        tree = trees(tree),
+        i = seq_along(trees(tree)),
+        SIMPLIFY = FALSE
+      )
+    ),
+    order = vctrs::vec_unchop(
+      mapply(
+        \(tree, i) {
+          n <- length(tree$order)
+          labels <- tree$labels[tree$order]
+          if (is.null(labels)) {
+            labels <- sprintf("node%i", seq_len(n))
+          }
+          sprintf("%s-%i", labels, i)
+        },
+        tree = trees(tree),
+        i = seq_along(trees(tree)),
+        SIMPLIFY = FALSE
+      )
+    )
+  )
+}
 
+#' @export
+as.character.tree_vctr <- function(x) {
+  sprintf("%s-%i", tree_labels(x), tree_id(x))
+}
 
+#' @export
+as.factor.tree_vctr <- function(x) {
+  factor(as.character(x), levels = leaf_labels(x))
+}
 
+#' @export
+is.infinite.tree_vctr <- function(x) {
+  logical(vctrs::vec_size(x))
+}
 
+#' @export
+vec_ptype2.tree_vctr.double <- function(x, y, ...) {
+  double()
+}
 
+#' @export
+vec_ptype2.double.tree_vctr <- function(x, y, ...) {
+  double()
+}
 
+#' @export
+vec_cast.double.tree_vctr <- function(x, to, ...) {
+  as.double(as.factor(x))
+}
 
+#' @export
+vec_ptype2.tree_vctr.integer <- function(x, y, ...) {
+  integer()
+}
 
+#' @export
+vec_ptype2.integer.tree_vctr <- function(x, y, ...) {
+  integer()
+}
 
-
+#' @export
+vec_cast.integer.tree_vctr <- function(x, to, ...) {
+  as.integer(as.factor(x))
+}
 
 # .on_load <- function(ns) {
 #   box::register_S3_method(name = "format", class = "tree_vctr", format.tree_vctr)

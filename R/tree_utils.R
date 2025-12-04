@@ -1,4 +1,3 @@
-#' @export
 as_tree_vctr <- function(hc) {
   new_tree_vctr(
     node = order(hc$order),
