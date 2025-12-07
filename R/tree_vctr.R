@@ -271,7 +271,6 @@ vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
 #' @importFrom vctrs vec_cast
 #' @export
 vec_cast.tree_vctr.tree_vctr <- function(x, to, ...) {
-  #
   vctrs::field(x, "which_tree") <- vctrs::allow_lossy_cast(
     vctrs::vec_cast(
       vctrs::field(x, "which_tree"),
@@ -313,14 +312,14 @@ tree_labels <- function(x) {
   with_tree_vctr(x, fn)
 }
 
-leaf_labels <- function(tree) {
+leaf_labels <- function(tree, use_labels = TRUE) {
   switch(node_encoding(tree),
     observation = vctrs::vec_unchop(
       mapply(
         \(tree, i) {
           n <- length(tree$order)
           labels <- tree$labels
-          if (is.null(labels)) {
+          if (is.null(labels) || !use_labels) {
             labels <- sprintf("obsv%i", seq_len(n))
           }
           sprintf("%s-%i", labels, i)
@@ -335,7 +334,7 @@ leaf_labels <- function(tree) {
         \(tree, i) {
           n <- length(tree$order)
           labels <- tree$labels[tree$order]
-          if (is.null(labels)) {
+          if (is.null(labels) || !use_labels) {
             labels <- sprintf("node%i", seq_len(n))
           }
           sprintf("%s-%i", labels, i)
@@ -379,6 +378,38 @@ vec_cast.double.tree_vctr <- function(x, to, ...) {
 }
 
 #' @export
+vec_cast.tree_vctr.integer <- function(x, to, ...) {
+  mtch <- leaf_labels(to, use_labels = FALSE)[x]
+  mtch <- sub("(node|obsv)", "", x = mtch)
+  split <- strsplit(mtch, "-")
+  nodes <- vapply(split, `[[`, FUN.VALUE = "", 1L) |> as.integer()
+  if (any(is_na <- is.na(mtch))) {
+    wt <- nodes
+    wt[!is_na] <- vapply(split[!is_na], `[[`, FUN.VALUE = "", 2L) |>
+      as.integer()
+  } else {
+    wt <- vapply(split, `[[`, FUN.VALUE = "", 2L) |>
+      as.integer()
+  }
+
+  new_pure_tree_vctr(
+    node = nodes,
+    which_tree = vctrs::new_factor(wt, levels(wt(to))),
+    tree = trees(to),
+    node_encoding = node_encoding(to)
+  )
+}
+
+#' @export
+vec_cast.tree_vctr.double <- function(x, to, ...) {
+  vec_cast(
+    vec_cast(x, integer()),
+    to,
+    ...
+  )
+}
+
+#' @export
 vec_ptype2.tree_vctr.integer <- function(x, y, ...) {
   integer()
 }
@@ -392,46 +423,3 @@ vec_ptype2.integer.tree_vctr <- function(x, y, ...) {
 vec_cast.integer.tree_vctr <- function(x, to, ...) {
   as.integer(as.factor(x))
 }
-
-# .on_load <- function(ns) {
-#   box::register_S3_method(name = "format", class = "tree_vctr", format.tree_vctr)
-#   box::register_S3_method(name = "obj_print_footer", class = "tree_vctr", obj_print_footer.tree_vctr)
-#   box::register_S3_method(name = "vec_restore", "tree_vctr", vec_restore.tree_vctr)
-#   # box::register_S3_method(name = "vec_ptype2", "tree_vctr.tree_vctr", vec_ptype2.tree_vctr.tree_vctr)
-#   box::register_S3_method(name = "vec_cast", "tree_vctr.tree_vctr", vec_cast.tree_vctr.tree_vctr)
-#   # box::register_S3_method(name = "vec_cast", "tree_vctr.partial_tree_vctr", vec_cast.tree_vctr.partial_tree_vctr)
-#   # box::register_S3_method(name = "vec_cast", "partial_tree_vctr.tree_vctr", vec_cast.partial_tree_vctr.tree_vctr)
-#   box::register_S3_method(
-#     name = "group_by_inner", "data.frame", group_by_inner.data.frame
-#   )
-#   box::register_S3_method(
-#     name = "as.character", "tree_vctr", as.character.tree_vctr
-#   )
-#   box::register_S3_method(
-#     name = "vec_ptype", "tree_vctr", vec_ptype.tree_vctr
-#   )
-#   box::register_S3_method(
-#     name = "vec_ptype_finalise", "tree_vctr_ptype", vec_ptype_finalise.tree_vctr_ptype
-#   )
-#   box::register_S3_method(
-#     name = "vec_ptype2", "tree_vctr_ptype.tree_vctr_ptype", vec_ptype2.tree_vctr_ptype.tree_vctr_ptype
-#   )
-#   # box::register_S3_method(
-#   #   name = "vec_ptype2", "tree_vctr.partial_tree_vctr", vec_ptype2.tree_vctr.partial_tree_vctr
-#   # )
-#   # box::register_S3_method(
-#   #   name = "vec_ptype2", "partial_tree_vctr.tree_vctr", vec_ptype2.partial_tree_vctr.tree_vctr
-#   # )
-#   # box::register_S3_method(
-#   #   name = "vec_proxy_equal", "tree_vctr",
-#   #   vec_proxy_equal.tree_vctr
-#   # )
-#   # box::register_S3_method(
-#   #   name = "vec_proxy_compare", "tree_vctr",
-#   #   vec_proxy_compare.tree_vctr
-#   # )
-# }
-
-# if (is.null(box::name())) {
-#   box::use(. / `__test_tree_vctr__`)
-# }
