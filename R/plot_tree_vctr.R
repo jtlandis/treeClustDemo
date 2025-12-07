@@ -1,5 +1,5 @@
 #' @export
-as.data.frame.tree_vec <- function(x, ...) {
+as.data.frame.tree_vctr <- function(x, ...) {
   data <- with_tree_vctr(
     encode_obsv(x),
     function(nodes, tree) {

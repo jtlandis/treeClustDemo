@@ -38,3 +38,8 @@ is_inner <- function(x) {
     node > length(tree$order)
   })
 }
+
+#' @export
+is_tree_vctr <- function(x) {
+  inherits(x, "tree_vctr")
+}
