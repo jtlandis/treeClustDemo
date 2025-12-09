@@ -1,5 +1,5 @@
 #' @export
-as.data.frame.tree_vctr <- function(x, ...) {
+tree_plot_data <- function(x, ...) {
   data <- with_tree_vctr(
     encode_obsv(x),
     function(nodes, tree) {
@@ -58,6 +58,12 @@ plot_tree_vctr_data <- function(data, ...) {
 #' @export
 autoplot.tree_vctr <- function(object, ..., .other_data = list()) {
   plot_tree_vctr_data(
-    as.data.frame(object, !!!.other_data), ...
+    tree_plot_data(object, !!!.other_data), ...
   ) + ggplot2::facet_wrap(~ tree_id(nodes), scales = "free_x")
+}
+
+inv <- function(tree) {
+  fct <- as.factor(tree)
+  autoplot(c(tree, inner(tree))) +
+    scale_x_continuous(labels = levels(fct), breaks = seq_len(nlevels(fct)))
 }
