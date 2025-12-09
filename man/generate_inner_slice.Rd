@@ -8,7 +8,7 @@ that only unique values of tree_vctr are
 considered. If leaf nodes are missing in the
 input, then they will not appear in the output.}
 \usage{
-generate_inner_slice(tree_vec)
+generate_inner_slice(tree_vec, node_level = NULL)
 }
 \description{
 creates a data.frame that maps inner_nodes
