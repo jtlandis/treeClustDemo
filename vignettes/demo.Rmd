@@ -14,11 +14,11 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
+```{r setup, message = FALSE}
 library(treeClustDemo)
 ```
 
-```{r}
+```{r, message = FALSE}
 library(plyxp)
 xp <- new_plyxp(glinos)
 xp <- xp |>
@@ -48,32 +48,12 @@ xp <- xp |>
 head(table(table(rowData(xp)$gene_id)))
 ```
 
-```{r compute satuRn DTU}
-se <- se(xp)
-se <- satuRn::fitDTU(se, formula = ~ 0 + condition)
-design <- model.matrix(~ 0 + condition, colData(se))
-colnames(design)
-colnames(design) <- levels(se$condition)
-L <- limma::makeContrasts(
-  WT_vs_KD = WT - KD,
-  levels = design
-)
-
-strn <- satuRn::testDTU(
-  object = se,
-  contrasts = L,
-  diagplot1 = FALSE,
-  diagplot2 = FALSE
-)
-
-```
 
 # Computing DESeq2
 
 ```{r count split with plyxp}
 library(DESeq2)
-dds <- strn |>
-  new_plyxp() |>
+dds <- xp |>
   mutate(
     train = rbinom(n(), counts, prob = 0.5),
     test = as.integer(counts - train)
@@ -194,8 +174,8 @@ print(res)
 ```
 
 
-```{r}
 
+```{r}
 inner_nodes <- summarize_by_inner(res,
   across(everything(), colSums),
   rows(n_children = n()),
@@ -214,10 +194,23 @@ inner_nodes <- plyxp(
 print(inner_nodes)
 ```
 
-```{r}
-pull(res, rows(exons)) |> ranges() |> class() |> print()
-```
 
-```{r}
-print(names(colData(inner_nodes)))
+```{r compute satuRn DTU}
+se <- se(xp)
+se <- satuRn::fitDTU(se, formula = ~ 0 + condition)
+design <- model.matrix(~ 0 + condition, colData(se))
+colnames(design)
+colnames(design) <- levels(se$condition)
+L <- limma::makeContrasts(
+  WT_vs_KD = WT - KD,
+  levels = design
+)
+
+strn <- satuRn::testDTU(
+  object = se,
+  contrasts = L,
+  diagplot1 = FALSE,
+  diagplot2 = FALSE
+)
+
 ```

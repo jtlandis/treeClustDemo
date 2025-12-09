@@ -1,0 +1,257 @@
+---
+title: "demo"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{demo}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r, setup, message = FALSE, warning = FALSE}
+library(treeClustDemo)
+library(TreeSummarizedExperiment)
+library(plyxp)
+library(ggtree)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# assays data (typically, representing observed data from an experiment)
+assay_data <- rbind(rep(0, 4), matrix(1:20, nrow = 5))
+colnames(assay_data) <- paste0("sample", 1:4)
+rownames(assay_data) <- paste("entity", seq_len(6), sep = "")
+assay_data
+```
+
+```{r}
+row_data <- data.frame(Kingdom = "A",
+                       Phylum = rep(c("B1", "B2"), c(2, 4)),
+                       Class = rep(c("C1", "C2", "C3"), each = 2),
+                       OTU = paste0("D", 1:6),
+                       row.names = rownames(assay_data),
+                       stringsAsFactors = FALSE)
+```
+
+
+```{r}
+col_data <- data.frame(gg = c(1, 2, 3, 3),
+                       group = rep(LETTERS[1:2], each = 2), 
+                       row.names = colnames(assay_data),
+                       stringsAsFactors = FALSE)
+```
+
+```{r}
+library(ape)
+
+# The first toy tree 
+set.seed(12)
+row_tree <- rtree(5)
+
+# The second toy tree 
+set.seed(12)
+col_tree <- rtree(4)
+
+# change node labels
+col_tree$tip.label <- colnames(assay_data)
+col_tree$node.label <- c("All", "GroupA", "GroupB")
+```
+
+```{r}
+# Visualize the row tree
+ggtree(row_tree, size = 2, branch.length = "none") +
+    geom_text2(aes(label = node), color = "darkblue",
+               hjust = -0.5, vjust = 0.7, size = 5.5) +
+    geom_text2(aes(label = label), color = "darkorange",
+               hjust = -0.1, vjust = -0.7, size = 5.5) 
+```
+
+```{r}
+# Visualize the column tree
+ggtree(col_tree, size = 2, branch.length = "none") +
+    geom_text2(aes(label = node), color = "darkblue",
+               hjust = -0.5, vjust = 0.7, size = 5.5) +
+    geom_text2(aes(label = label), color = "darkorange",
+               hjust = -0.1, vjust = -0.7, size = 5.5)+
+    ylim(c(0.8, 4.5)) +
+    xlim(c(0, 2.2))
+```
+
+
+```{r}
+pull_tse <- function(tse, which = c("row", "col")) {
+  which_dim <- match.arg(which, c("row", "col"))
+  switch(
+    which_dim,
+    col = {
+      lnks <- colLinks(tse)
+      trees <- colTree(tse, whichTree = NULL) |> lapply(tree_vctr)
+    },
+    row = {
+      lnks <- rowLinks(tse)
+      trees <- rowTree(tse, whichTree = NULL) |> lapply(tree_vctr)
+    }
+  )
+  chops <- vctrs::vec_group_loc(lnks$whichTree)
+  tree_labels <- vctrs::vec_chop(lnks$nodeLab, indices = chops$loc)
+  trees <- trees[match(names(trees), chops$key)]
+  mapply(\(labels, tree_ptype) {
+    hc <- tree(tree_ptype)
+    new_tree_vctr(
+      node = match(labels, hc$labels),
+      which_tree = 1L,
+      tree = list(hc)
+    )
+  }, labels = tree_labels, tree_ptype = trees, SIMPLIFY = FALSE) |>
+  vctrs::list_unchop(indices = chops$loc)
+}
+
+
+
+
+```
+
+```{r}
+tip_lab <- row_tree$tip.label
+row_lab <- tip_lab[c(1, 1:5)]
+both_tse <- TreeSummarizedExperiment(assays = list(Count = assay_data),
+                                     rowData = row_data,
+                                     colData = col_data,
+                                     rowTree = row_tree,
+                                     rowNodeLab = row_lab,
+                                     colTree = col_tree)
+print(both_tse)
+```
+
+
+```{r}
+aggTSE(x = both_tse,
+      colLevel = c("GroupA", "GroupB"),
+      colFun = sum) |> assay() 
+```
+
+
+```{r}
+
+# convert some phylo or hclust into tree_vctr
+xp <- new_plyxp(both_tse) |>
+  plyxp(
+    function(se) {
+      colData(se)$tree <- pull_tse(se, "col")
+      se
+    }
+  )
+
+# examine nodes
+pull(xp, cols(tree)) |> print()
+# display node parents for summary
+pull(xp, cols(tree)) |> parent_nodes() |> print()
+
+xp |>
+  group_by_tree_nodes(
+    .by = cols(tree),
+    col_node_level = cols(parent_nodes(tree))
+  ) |>
+  summarize(Count = rowSums(Count)) |>
+  pull(Count) |> 
+  print()
+```
+
+```{r}
+library(treeclimbR)
+
+da_lse <- readRDS(system.file("extdata", "da_sim_100_30_18de.rds", 
+                              package = "treeclimbR"))
+print(da_lse)
+```
+
+
+```{r}
+## Generate tree visualization where true signal leaves are colored orange
+## ...Find internal nodes in the subtrees where all leaves are differentially 
+##    abundant. These will be colored orange.
+nds <- joinNode(tree = rowTree(da_lse), 
+                node = rownames(da_lse)[rowData(da_lse)$Signal])
+br <- unlist(findDescendant(tree = rowTree(da_lse), node = nds,
+                            only.leaf = FALSE, self.include = TRUE))
+df_color <- data.frame(node = showNode(tree = rowTree(da_lse), 
+                                       only.leaf = FALSE)) |>
+    mutate(signal = ifelse(node %in% br, "yes", "no"))
+## ...Generate tree
+da_fig_tree <- ggtree(tr = rowTree(da_lse), layout = "rectangular", 
+                      branch.length = "none", 
+                      aes(color = signal)) %<+% df_color +
+    scale_color_manual(values = c(no = "grey", yes = "orange"))
+## ...Zoom into the subtree defined by a particular node. In this case, we 
+##    know that all true signal leaves were sampled from the subtree defined 
+##    by a particular node (stored in metadata(da_lse)$parentNodeForSignal).
+da_fig_tree <- scaleClade(da_fig_tree, 
+                          node = metadata(da_lse)$parentNodeForSignal, 
+                          scale = 4)
+
+## Extract count matrix and scale each row to [0, 1]
+count <- assay(da_lse, "counts")
+scale_count <- t(apply(count, 1, FUN = function(x) {
+    xx <- x
+    rx <- (max(xx) - min(xx))
+    (xx - min(xx))/max(rx, 1)
+}))
+rownames(scale_count) <- rownames(count)
+colnames(scale_count) <- colnames(count)
+
+## Plot tree and heatmap of scaled counts
+## ...Generate sample annotation
+vv <- gsub(pattern = "_.*", "", colnames(count))
+names(vv) <- colnames(scale_count)
+anno_c <- structure(vv, names = vv)
+TreeHeatmap(tree = rowTree(da_lse), tree_fig = da_fig_tree, 
+            hm_data = scale_count, legend_title_hm = "Scaled\ncount",
+            column_split = vv, rel_width = 0.6,
+            tree_hm_gap = 0.3,
+            column_split_label = anno_c) +
+    scale_fill_viridis_c(option = "B") +
+    scale_y_continuous(expand = c(0, 10))
+
+```
+
+
+
+```{r}
+
+## Get a list of all node IDs
+all_node <- showNode(tree = rowTree(da_lse), only.leaf = FALSE)
+print(all_node)
+```
+
+```{r}
+## Calculate counts for internal nodes
+da_tse <- aggTSE(x = da_lse, rowLevel = all_node, rowFun = sum)
+print(da_tse)
+```
+
+```{r}
+xplse <- new_plyxp(da_lse) |>
+  plyxp(
+    \(se) {
+      rowData(se)$tree <- pull_tse(se, "row")
+      se
+    }
+  )
+print(xplse)
+da_xp <- xplse |>
+  group_by_tree_nodes(
+    .by = rows(tree),
+    only_inner = FALSE
+  ) |>
+  summarise(counts = colSums(counts), rows(Signal = any(Signal)))
+
+print(da_xp)
+
+```
