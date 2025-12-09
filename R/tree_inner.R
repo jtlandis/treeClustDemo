@@ -89,7 +89,7 @@ generate_inner_slice <- function(tree_vec, node_level = NULL) {
   tbl
 }
 
-
+#' @export
 child_nodes <- function(tree, times = 1L, remove_leaf = TRUE) {
   merge_fn <- switch(node_encoding(tree),
     observation = function(merge, order) {
@@ -139,6 +139,7 @@ child_nodes <- function(tree, times = 1L, remove_leaf = TRUE) {
 }
 
 
+#' @export
 parent_nodes <- function(tree, times = 1L, remove_top = TRUE) {
   merge_fn <- switch(node_encoding(tree),
     observation = function(merge, order) {
