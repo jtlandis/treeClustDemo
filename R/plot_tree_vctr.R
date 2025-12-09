@@ -54,6 +54,7 @@ plot_tree_vctr_data <- function(data, ...) {
     )
 }
 
+#' @importFrom ggplot2 autoplot
 #' @export
 autoplot.tree_vctr <- function(object, ..., .other_data = list()) {
   plot_tree_vctr_data(
