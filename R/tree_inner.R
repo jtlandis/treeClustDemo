@@ -21,30 +21,38 @@ inner <- function(tree_vec) {
 #' considered. If leaf nodes are missing in the
 #' input, then they will not appear in the output.
 #' @export
-generate_inner_slice <- function(tree_vec, node_level = NULL) {
+generate_inner_slice <- function(
+  tree_vec, node_level = NULL,
+  only_inner = TRUE
+) {
   trees <- trees(tree_vec)
   nodes <- node_id(tree_vec)
   ind <- vctrs::vec_group_loc(tree_id(tree_vec))
   ind <- vctrs::vec_slice(ind, order(ind$key))
-  inner <- lapply(trees, inner_nodes)
   table_fn <- switch(node_encoding(tree_vec),
     observation = function(nodes, tree) nodes,
     order = function(nodes, tree) {
       match(nodes, match(seq_len(length(tree$order)), tree$order))
     }
   )
+  desc_id <- if (only_inner) {
+    lapply(trees, inner_nodes)
+  } else {
+    lapply(trees, function(tree) {
+      seq_along(node_descendants(tree))
+    })
+  }
   desc <- mapply(
-    function(nodes, tree, ind, inner) {
+    function(nodes, tree, ind, desc_id) {
       # desc are always encoded as observations
       desc <- node_descendants(tree)
-      inner <- inner_nodes(tree)
       # convert nodes to observation encoding
       table <- data.frame(
         node = table_fn(nodes, tree),
         ind = ind
       )
       # match descendants obsv encoding to what we pulled
-      lapply(desc[inner],
+      lapply(desc[desc_id],
         \(desc, table) {
           vctrs::vec_slice(
             table,
@@ -59,14 +67,14 @@ generate_inner_slice <- function(tree_vec, node_level = NULL) {
     nodes = vctrs::vec_chop(nodes, ind$loc),
     tree = trees,
     ind = ind$loc,
-    inner = inner,
+    desc_id = desc_id,
     SIMPLIFY = FALSE
   )
-  inner_sizes <- vapply(trees, \(tree) nrow(tree$merge), 1L)
+  sizes <- lengths(desc)
   tbl <- tibble::tibble(
     nodes = new_tree_vctr(
-      node = vctrs::list_unchop(inner),
-      which_tree = rep(seq_along(trees), inner_sizes),
+      node = vctrs::list_unchop(desc_id),
+      which_tree = rep(seq_along(trees), sizes),
       tree = trees,
       node_encoding = node_encoding(tree_vec)
     ),

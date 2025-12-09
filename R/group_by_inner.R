@@ -1,17 +1,23 @@
 #' @export
-group_by_inner <- function(x, .by, ...) {
+group_by_inner <- function(x, .by, ..., only_inner = TRUE) {
   UseMethod("group_by_inner")
 }
 
 #' @export
-group_by_inner.data.frame <- function(x, .by, ..., node_level = NULL) {
+group_by_inner.data.frame <- function(
+  x, .by, ..., only_inner = TRUE,
+  node_level = NULL
+) {
   by_tree <- dplyr::select(x, {{ .by }})
   stopifnot(
     "`.by` should only select one variable" = length(by_tree) == 1L,
     "`.by` should be a 'tree_vctr'" = inherits(by_tree[[1]], "tree_vctr")
   )
   node_level <- rlang::eval_tidy({{ node_level }}, data = x)
-  groups <- generate_inner_slice(by_tree[[1]], node_level = node_level) |>
+  groups <- generate_inner_slice(by_tree[[1]],
+    node_level = node_level,
+    only_inner = only_inner
+  ) |>
     dplyr::rename(
       "{names(by_tree)}" := nodes,
       .rows = children
@@ -22,6 +28,7 @@ group_by_inner.data.frame <- function(x, .by, ..., node_level = NULL) {
 #' @export
 group_by_inner.PlySummarizedExperiment <- function(
   x, .by, ...,
+  only_inner = TRUE,
   row_node_level = NULL, col_node_level = NULL
 ) {
   by_tree <- dplyr::select(x, {{ .by }})
@@ -49,7 +56,8 @@ group_by_inner.PlySummarizedExperiment <- function(
       NULL
     }
     row_data <- generate_inner_slice(row_data[[1]],
-      node_level = node_level
+      node_level = node_level,
+      only_inner = only_inner
     ) |>
       dplyr::rename(
         "{names(row_data)}" := nodes,
@@ -73,7 +81,8 @@ group_by_inner.PlySummarizedExperiment <- function(
       NULL
     }
     col_data <- generate_inner_slice(col_data[[1]],
-      node_level = node_level
+      node_level = node_level,
+      only_inner = only_inner
     ) |>
       dplyr::rename(
         "{names(col_data)}" := nodes,
