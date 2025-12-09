@@ -84,6 +84,20 @@ cluster_mat_by_rows <- function(
   row_tree
 }
 
+#' cluster data frame
+#' @examples
+#' mat <- matrix(0, 6, 5)
+#' mat[1:3, 1:3] <- rnorm(9, 10)
+#' mat[1:2, 4:5] <- rnorm(4, 4)
+#' mat[4:6, 1:2] <- rnorm(6, 7)
+#' mat[4:6, 3:5] <- rnorm(9, 2)
+#' mat[3, 4:5] <- rnorm(2, 15)
+#' dimnames(mat) <- list(sprintf("rows%i", 1:6), sprintf("cols%i", 1:5))
+#' df <- tibble::as_tibble(mat, rownames = "rows") |>
+#'   dplyr::mutate(grow = rep(1:2, each = 3)) |>
+#'   tidyr::pivot_longer(cols = -c(rows, grow), names_to = "cols") |>
+#'   dplyr::mutate(gcol = rep(c(1, 1, 1, 2, 2), 6))
+#' @export
 df_cluster <- function(
   data,
   id_rows,
