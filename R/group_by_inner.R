@@ -1,10 +1,10 @@
 #' @export
-group_by_inner <- function(x, .by, ..., only_inner = TRUE) {
-  UseMethod("group_by_inner")
+group_by_tree_nodes <- function(x, .by, ..., only_inner = TRUE) {
+  UseMethod("group_by_tree_nodes")
 }
 
 #' @export
-group_by_inner.data.frame <- function(
+group_by_tree_nodes.data.frame <- function(
   x, .by, ..., only_inner = TRUE,
   node_level = NULL
 ) {
@@ -26,7 +26,7 @@ group_by_inner.data.frame <- function(
 }
 
 #' @export
-group_by_inner.PlySummarizedExperiment <- function(
+group_by_tree_nodes.PlySummarizedExperiment <- function(
   x, .by, ...,
   only_inner = TRUE,
   row_node_level = NULL, col_node_level = NULL
@@ -107,7 +107,7 @@ group_by_inner.PlySummarizedExperiment <- function(
 }
 
 #' @export
-summarize_by_inner <- function(x, ..., .by) {
-  x <- group_by_inner(x, {{ .by }})
+summarize_by_tree_nodes <- function(x, ..., .by) {
+  x <- group_by_tree_nodes(x, {{ .by }})
   dplyr::summarise(x, ...)
 }
