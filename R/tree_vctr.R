@@ -218,6 +218,11 @@ tree_vctr.hclust <- function(x) {
 }
 
 #' @export
+tree_vctr.phylo <- function(x) {
+  tree_vctr(phylo_to_hclust(x))
+}
+
+#' @export
 tree_vctr.default <- function(x) {
   tree_vctr(as.hclust(x))
 }
