@@ -134,7 +134,8 @@ print(both_tse)
 ```{r}
 aggTSE(x = both_tse,
       colLevel = c("GroupA", "GroupB"),
-      colFun = sum) |> assay() 
+      colFun = sum) |> assay() |>
+print()
 ```
 
 
@@ -233,7 +234,7 @@ print(all_node)
 ```{r}
 ## Calculate counts for internal nodes
 da_tse <- aggTSE(x = da_lse, rowLevel = all_node, rowFun = sum)
-print(da_tse)
+da_tse |> print()
 ```
 
 ```{r}
@@ -250,7 +251,8 @@ da_xp <- xplse |>
     .by = rows(tree),
     only_inner = FALSE
   ) |>
-  summarise(counts = colSums(counts), rows(Signal = any(Signal)))
+  summarise(counts = colSums(counts), rows(Signal = any(Signal))) |>
+  mutate(rows(.features = as.character(tree)))
 
 print(da_xp)
 
