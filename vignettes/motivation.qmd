@@ -1,0 +1,137 @@
+---
+title: Tree Aggregation with plyxp and tree_vctr
+author: Justin Landis
+---
+
+```{r package setup, message=FALSE, warning=FALSE}
+library(TreeSummarizedExperiment)
+library(plyxp)
+library(treeClustDemo)
+```
+
+### Data Setup
+
+```{r}
+set.seed(42)
+se <- SummarizedExperiment(
+  assays = list(counts = matrix(rpois(10000, 10), 1000, 10)),
+  rowData = DataFrame(
+    feature = sprintf("f%04i", 1:1000),
+    length = sample(1e3:1e5, 1000, replace = TRUE)
+  ),
+  colData = DataFrame(
+    sample = sprintf("s%02i", 1:10)
+  )
+)
+
+.rowtree <- ape::rtree(1000)
+tse <- TreeSummarizedExperiment(
+  assays = assays(se),
+  rowData = rowData(se),
+  colData = colData(se),
+  rowTree = .rowtree,
+  rowNodeLab = sample(.rowtree$tip.label)
+)
+```
+
+## The Goal
+
+Provide some tidyomics styled abstraction over `TreeSummarizedExperiment` (`treeSE`). 
+As noted from a prior meeting, the main utility for `treeSE` 
+<!-- perhaps there are other utilities that I am unware of -->
+is the ability to not only store and map arbitrary trees to the rows or columns of the `SummarizedExperiment` (`SE`), but also provide utility functions for summarizing data to some level of the tree nodes.
+
+In tidyomics, there are two stylings to approach this abstraction.
+We could apply the relaxed styling of `TidySummarizedExperiment` (`tidySE`) or we could approach from a more verbose styling of `plyxp`.
+Given my bias, I will be demonstrating the approach from `plyxp`
+
+## Background `treeSE`
+
+![The structure of a treeSE object as shown from the [Bioconductor vignette](https://www.bioconductor.org/packages/release/bioc/vignettes/TreeSummarizedExperiment/inst/doc/Introduction_to_treeSummarizedExperiment.html).](./treeSE-overview.png)
+
+In the above figure, we can see how the `treeSE` package chose to map arbitrary `phylo` trees to data within an `SE` object.
+The data is mapped by either the  "rowLink" or "colLink" data structure.
+
+
+
+```{r}
+rowTree(tse, whichTree = 1L)
+rowLinks(tse)
+```
+
+The key to this stucture is the "LinkDataFrame" class, which is meant to be parallel to the associated `rowData` or `colData` of the `SE` object.
+In other words, the `i`th observation of the `rowLinks` will hold a mapping to some node of the `rowTree`, which in turns maps to the `i`th row of the `SE` object.
+
+## Applying `plyxp` to tree Structures
+
+The work at present is not a complete implementation of `tidyomics` for the `treeSE` class, however it does provide building blocks that could lead to its implementation.
+
+The reason a complete implementation hasn't been made is that the internals `plyxp` relies on to do it properly have not yet been exported and are not yet stable.
+
+That being said, `plyxp` works as intended with normal vectors or S4Vectors within the `rowData` or `colData`.
+Thus this proof of concept abstracts the mapping of the `LinkDataFrame` into a similar custom structure, a `tree_vctr`, in order to demonstrate the funcitonality.
+
+### Anatomy of a `tree_vctr`
+
+A `tree_vctr` is an S3 vector built on top of the "vctrs_rcrd" class from the `vctrs` package.
+It is meant to be a light weight, self contained structure, that provides similar funcitonality of the `rowLinks()` and `rowTree()` functions.
+
+```{r}
+tree_vec <- tree_vctr(.rowtree)
+# attribute: tree -> list of hclust objects
+# data: data.frame(which_tree: <factor>, node: <integer>)
+#   which_tree is factor incoding where
+#   - level 1 maps to tree index 1,
+#     level 2 maps to tree index 2, ... etc
+#   - levels are computed by `digest::digest` 
+#     the hclust objects
+# 
+#   node is an integer representing the node of tree i
+#   - This number depends on the size of the tree.
+#     If tree 1 has N leafs, then node cannot be 
+#     greater than M = N * (N - 1)
+# 
+#   The output for each element is formated as:
+#     <which_tree>:<node_id>
+c(head(tree_vec), tail(tree_vec))
+```
+
+Because it is built on top of the `vctrs` package, standard book keeping is retained as you subset, or reorder the vector.
+
+The intent of this object is to sit alongside other vectors to annotate these objects. 
+This differs from `treeSE` in that the `LinkDataFrame` and the `rowTree()` list are separate objects that live on a `treeSE` object.
+By themselves, they are not informative.
+The `tree_vctr` abstracts this metadata as a stand-alone vector that can be used by composition with any standard `SE` object.
+
+::: {.callout-warning}
+
+At the moment, `tree_vctr` only works with `hclust` objects as our use case involves this type of clustering.
+This is also differs from `treeSE` in that the expected tree structure must be a `phylo` object.
+We may be able to make this vector class agnostic towards the trees it holds.
+
+:::
+
+The `tree_vec` object is not yet properly mapped to our data.
+We can use data from our `tse` object to properly map the nodes.
+
+```{r}
+rowData(se)$tree <- tree_vec[rowLinks(tse)$nodeNum]
+rowData(se)
+```
+
+### Utility functions for `tree_vctr`
+
+```{r}
+.tvec <- sample(tree_vec, 10)
+tree_id(.tvec) # get tree index as integer
+node_id(.tvec) # get node id
+tree(.tvec) # expects only 1 tree
+trees(.tvec) # returns all trees
+is_inner(.tvec) #logical vector if node is inner node
+tail(inner(.tvec)) # for each tree, generate all inner nodes
+.parent <- parent_nodes(.tvec) # get the parent of a node
+.parent
+child_nodes(.parent) # get both children from a parent
+```
+
+# end
