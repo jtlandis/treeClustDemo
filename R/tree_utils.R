@@ -56,18 +56,31 @@ phylo_to_hclust <- function(x) {
     m <- matrix(c(-1L, -2L), 1, 2)
     bt <- x$edge.length[1]
   } else {
+    #
+    labels <- x$node.label %||% sprintf("node-%i", n + seq_len(x$Nnode))
     x$node.label <- NULL
     bt <- ape::branching.times(x)
+    .nms <- names(bt)
+    bt <- data.frame(bt = bt, labs = labels)
+    rownames(bt) <- .nms
     N <- n - 1L
     x <- reorder(x, "postorder")
     m <- matrix(x$edge[, 2], N, 2, byrow = TRUE)
     anc <- x$edge[c(TRUE, FALSE), 1]
-    bt <- bt[as.character(anc)]
-    bt <- c(sort(bt[-N]), bt[N])
-    o <- match(names(bt), anc)
+    bt <- bt[as.character(anc), ]
+    bt_last <- bt[N, ]
+    bt <- bt[-N, ]
+    bt <- rbind(bt[order(bt$bt, decreasing = FALSE), ], bt_last)
+    o <- match(row.names(bt), anc)
     m <- m[o, ]
+    if (!all(is.na(bt$labs))) {
+      row.names(m) <- bt$labs
+    }
     TIPS <- m <= n
     m[TIPS] <- -m[TIPS]
+    .nms <- row.names(bt)
+    bt <- bt$bt
+    names(bt) <- .nms
     oldnodes <- as.numeric(names(bt))[-N]
     m[match(oldnodes, m)] <- 1:(N - 1)
     names(bt) <- NULL
