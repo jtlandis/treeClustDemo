@@ -57,7 +57,7 @@ phylo_to_hclust <- function(x) {
     bt <- x$edge.length[1]
   } else {
     x$node.label <- NULL
-    bt <- branching.times(x)
+    bt <- ape::branching.times(x)
     N <- n - 1L
     x <- reorder(x, "postorder")
     m <- matrix(x$edge[, 2], N, 2, byrow = TRUE)
