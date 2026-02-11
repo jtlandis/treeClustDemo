@@ -41,65 +41,6 @@ tree <- function(x) {
 }
 
 
-#' @export
-node_encoding <- function(x) {
-  out <- attr(x, "node_encoding", exact = TRUE) %||%
-    stop("malformed `tree_vctr` object.")
-  if (!out %in% c("order", "observation")) {
-    stop("malformed `tree_vctr` object.")
-  }
-  out
-}
-
-
-swap_node_encoding <- function(x) {
-  node_encoding <- node_encoding(x)
-  fn <- switch(node_encoding,
-    observation = function(node, tree) {
-      n <- length(tree$order)
-      is_leaf <- node <= n
-      swap <- match(node, tree$order)
-      node[is_leaf] <- swap[is_leaf]
-      node
-    },
-    order = function(node, tree) {
-      n <- length(tree$order)
-      is_leaf <- node <= n
-      swap <- match(
-        node,
-        match(seq_len(length(tree$order)), tree$order)
-      )
-      node[is_leaf] <- swap[is_leaf]
-      node
-    }
-  )
-  new_nodes <- with_tree_vctr(x, fn)
-  new_tree_vctr(
-    node = new_nodes,
-    which_tree = tree_id(x),
-    tree = trees(x),
-    node_encoding = switch(node_encoding,
-      observation = "order",
-      order = "observation"
-    )
-  )
-}
-
-#' @export
-encode_order <- function(x) {
-  switch(node_encoding(x),
-    observation = swap_node_encoding(x),
-    order = x
-  )
-}
-
-#' @export
-encode_obsv <- function(x) {
-  switch(node_encoding(x),
-    observation = x,
-    order = swap_node_encoding(x)
-  )
-}
 
 node_descendants <- function(tree) {
   with_descendants(tree)$descendants

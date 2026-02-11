@@ -4,7 +4,7 @@
 #' the rows of a matrix-like object. Each element of a `tree_vctr` object
 #' will have a node id and a tree id, which together identify a specific
 #' observation within the `hclust` object stored in the `tree` attribute.
-#' The node id may be encoded in two ways, which mainly provide convience
+#' DEFUNCT: The node id may be encoded in two ways, which mainly provide convience
 #' with sorting this vector according to either the order of observations
 #' or an order that would cluster the observations per hclust object.
 #'
@@ -12,18 +12,11 @@
 #' @param which_tree identifies which element of `node` maps to which hclust
 #' tree in the `tree` attribute
 #' @param tree a list of `hclust` objects
-#' @param node_encoding character scalar of how this object's node is encoded.
-#' The default, "order", will encode nodes according to how observations are
-#' ordered in the respective `hclust` object. The alternative, "observation",
-#' will encode nodes according to the original observation indices used to
-#' generate the hclust object. These options only affect leaf nodes, as
-#' internal nodes will always be encoded by the height of the hclust.
 #' @export
 new_tree_vctr <- function(
   node = integer(),
   which_tree = integer(),
-  tree,
-  node_encoding = c("order", "observation")
+  tree
 ) {
   node <- vctrs::vec_cast(node, integer())
   which_tree <- vctrs::vec_recycle(
@@ -47,8 +40,7 @@ new_tree_vctr <- function(
   new_pure_tree_vctr(
     node = node,
     which_tree = vctrs::new_factor(which_tree, levels = hashes),
-    tree = tree,
-    node_encoding = match.arg(node_encoding, c("order", "observation"))
+    tree = tree
   )
 }
 
@@ -61,8 +53,7 @@ is_tree_obj <- function(obj) {
 new_pure_tree_vctr <- function(
   node = integer(),
   which_tree = factor(),
-  tree = list(),
-  node_encoding = "order"
+  tree = list()
 ) {
   out <- list(
     which_tree = which_tree,
@@ -73,7 +64,6 @@ new_pure_tree_vctr <- function(
   #   tree = tree, class = tree_vctr_class
   # )
   attr(out, "tree") <- tree
-  attr(out, "node_encoding") <- node_encoding
   class(out) <- tree_vctr_class
   out
 }
@@ -109,68 +99,11 @@ format.tree_vctr <- function(x, ...) {
 #' @export
 obj_print_footer.tree_vctr <- function(x, ...) {
   n_trees <- length(trees(x))
-  encode <- node_encoding(x)
   cat(
     sep = "",
-    "# encoding by ", encode, "\n# n tree(s): ", n_trees, "\n"
+    "# n tree(s): ", n_trees, "\n"
   )
 }
-
-# .tree_registry <- new.env(parent = emptyenv())
-
-# register_tree <- function(tree) {
-#   tree_hash <- digest::digest(tree)
-#   if (is.null(.tree_registry[[tree_hash]])) {
-#     .tree_registry[[tree_hash]] <- tree
-#   }
-#   tree_hash
-# }
-
-# unregister_hash <- function(hash) {
-#   val <- .tree_registry[[hash]]
-#   if (is.null(val)) {
-#     stop(
-#       sprintf(
-#         "cannot find hash %s. was it possible these were called out of order?",
-#         hash
-#       )
-#     )
-#   }
-#   rm(list = hash, envir = .tree_registry)
-#   val
-# }
-
-# new_tree_vctr_ptype <- function(learned = character(), encoding = "order") {
-#   vctrs::new_vctr(
-#     integer(),
-#     learned = learned,
-#     encoding = encoding,
-#     class = "tree_vctr_ptype"
-#   )
-# }
-
-
-# into_tree_vctr_ptype <- function(tree_vec) {
-#   new_tree_vctr_ptype(
-#     learned = vapply(trees(tree_vec), register_tree, ""),
-#     encoding = node_encoding(tree_vec)
-#   )
-# }
-
-# vec_ptype.tree_vctr <- function(x, ...) {
-#   into_tree_vctr_ptype(x)
-# }
-
-# @importFrom vctrs vec_ptype_finalise
-# @export
-# vec_ptype_finalise.tree_vctr_ptype <- function(x, ...) {
-#   learned <- vctrs::vec_unique(attr(x, "learned"))
-#   tree <- lapply(learned, unregister_hash)
-#   new_tree_vctr(
-#     tree = tree,
-#     node_encoding = attr(x, "encoding")
-#   )
-# }
 
 
 tree_vctr_drop <- function(x) {
@@ -199,8 +132,7 @@ tree_vctr_drop <- function(x) {
       vctrs::vec_match(ints, unique_tree_id),
       old_lvls
     ),
-    tree = to_trees,
-    node_encoding = node_encoding(x)
+    tree = to_trees
   )
 }
 
@@ -234,21 +166,6 @@ tree_vctr.default <- function(x) {
   tree_vctr(as.hclust(x))
 }
 
-# #' @importFrom vctrs vec_restore
-# #' @export
-# vec_restore.tree_vctr <- function(x, to, ...) {
-#   #
-#   if (vctrs::vec_size(x)) {
-#
-#   } else {
-# new_pure_tree_vctr(
-#   node = x$node,
-#   which_tree = x$which_tree,
-#   tree = trees(to),
-#   node_encoding = node_encoding(to)
-# )
-#   }
-# }
 
 #' @importFrom vctrs vec_ptype2
 #' @export
@@ -275,8 +192,7 @@ vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
   )
   new_pure_tree_vctr(
     which_tree = which_tree,
-    tree = xtree,
-    node_encoding = node_encoding(x)
+    tree = xtree
   )
 }
 
@@ -289,72 +205,38 @@ vec_cast.tree_vctr.tree_vctr <- function(x, to, ...) {
       vctrs::field(to, "which_tree")
     )
   )
-  # the tree attribute should already be correct???
-  if (!identical(node_encoding(x), node_encoding(to))) {
-    x <- swap_node_encoding(x)
-  }
   x
 }
 
 
 tree_labels <- function(x) {
-  fn <- switch(node_encoding(x),
-    observation = function(node, tree) {
-      n <- length(tree$order)
-      labels <- sprintf("obsv%i", node)
-      is_leaf <- node <= n
-      tree_labels <- tree$labels
-      if (!is.null(tree_labels)) {
-        labels[is_leaf] <- tree_labels[node][is_leaf]
-      }
-      labels
-    },
-    order = function(node, tree) {
-      n <- length(tree$order)
-      labels <- sprintf("node%i", node)
-      is_leaf <- node <= n
-      tree_labels <- tree$labels
-      if (!is.null(tree_labels)) {
-        tree_labels <- tree_labels[tree$order]
-        labels[is_leaf] <- tree_labels[node][is_leaf]
-      }
-      labels
+  with_tree_vctr(x, function(node, tree) {
+    n <- length(tree$order)
+    labels <- sprintf("node%i", node)
+    is_leaf <- node <= n
+    tree_labels <- tree$labels
+    if (!is.null(tree_labels)) {
+      tree_labels <- tree_labels[tree$order]
+      labels[is_leaf] <- tree_labels[node][is_leaf]
     }
-  )
-  with_tree_vctr(x, fn)
+    labels
+  })
 }
 
 leaf_labels <- function(tree, use_labels = TRUE) {
-  switch(node_encoding(tree),
-    observation = vctrs::vec_unchop(
-      mapply(
-        \(tree, i) {
-          n <- length(tree$order)
-          labels <- tree$labels
-          if (is.null(labels) || !use_labels) {
-            labels <- sprintf("obsv%i", seq_len(n))
-          }
-          sprintf("%s-%i", labels, i)
-        },
-        tree = trees(tree),
-        i = seq_along(trees(tree)),
-        SIMPLIFY = FALSE
-      )
-    ),
-    order = vctrs::vec_unchop(
-      mapply(
-        \(tree, i) {
-          n <- length(tree$order)
-          labels <- tree$labels[tree$order]
-          if (is.null(labels) || !use_labels) {
-            labels <- sprintf("node%i", seq_len(n))
-          }
-          sprintf("%s-%i", labels, i)
-        },
-        tree = trees(tree),
-        i = seq_along(trees(tree)),
-        SIMPLIFY = FALSE
-      )
+  vctrs::vec_unchop(
+    mapply(
+      \(tree, i) {
+        n <- length(tree$order)
+        labels <- tree$labels[tree$order]
+        if (is.null(labels) || !use_labels) {
+          labels <- sprintf("node%i", seq_len(n))
+        }
+        sprintf("%s-%i", labels, i)
+      },
+      tree = trees(tree),
+      i = seq_along(trees(tree)),
+      SIMPLIFY = FALSE
     )
   )
 }
@@ -407,8 +289,7 @@ vec_cast.tree_vctr.integer <- function(x, to, ...) {
   new_pure_tree_vctr(
     node = nodes,
     which_tree = vctrs::new_factor(wt, levels(wt(to))),
-    tree = trees(to),
-    node_encoding = node_encoding(to)
+    tree = trees(to)
   )
 }
 

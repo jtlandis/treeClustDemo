@@ -22,8 +22,8 @@ with_descendants.hclust <- function(tree) {
   m <- tree$merge
   n <- nrow(m) + 1L
   is_merge <- m < 0
-  # descendants are indexed by observation
-  m[is_merge] <- -m[is_merge]
+  # descendants are indexed by node...
+  m[is_merge] <- match(-m[is_merge], tree$order)
   m[!is_merge] <- m[!is_merge] + n
   node_end <- n + nrow(m)
   children <- vector("list", length = node_end)

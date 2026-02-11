@@ -3,14 +3,12 @@ root_nodes <- function(tree_vec) {
   fct <- wt(tree_vec)
   hashes <- levels(fct)
   all_trees <- trees(tree_vec)
-  node_encoding <- node_encoding(tree_vec)
   trees <- Map(
     function(tree, which_tree) {
       new_pure_tree_vctr(
         node = vctrs::vec_cast(tree_top_node(tree), integer()),
         which_tree = vctrs::new_factor(which_tree, levels = hashes),
-        tree = all_trees,
-        node_encoding = node_encoding
+        tree = all_trees
       )
     },
     tree = all_trees,
@@ -25,7 +23,6 @@ inner_nodes <- function(tree_vec) {
   fct <- wt(tree_vec)
   hashes <- levels(fct)
   all_trees <- trees(tree_vec)
-  node_encoding <- node_encoding(tree_vec)
   trees <- Map(
     function(tree, which_tree) {
       node <- vctrs::vec_cast(node_inner(tree), integer())
@@ -35,8 +32,7 @@ inner_nodes <- function(tree_vec) {
           vctrs::vec_rep(which_tree, length(node)),
           levels = hashes
         ),
-        tree = all_trees,
-        node_encoding = node_encoding
+        tree = all_trees
       )
     },
     tree = all_trees,
@@ -50,7 +46,6 @@ leaf_nodes <- function(tree_vec) {
   fct <- wt(tree_vec)
   hashes <- levels(fct)
   all_trees <- trees(tree_vec)
-  node_encoding <- node_encoding(tree_vec)
   trees <- Map(
     function(tree, which_tree) {
       len <- tree_leaf_max_node(tree)
@@ -61,8 +56,7 @@ leaf_nodes <- function(tree_vec) {
           vctrs::vec_rep(which_tree, len),
           levels = hashes
         ),
-        tree = all_trees,
-        node_encoding = node_encoding
+        tree = all_trees
       )
     },
     tree = all_trees,
@@ -77,7 +71,6 @@ all_nodes <- function(tree_vec) {
   fct <- wt(tree_vec)
   hashes <- levels(fct)
   all_trees <- trees(tree_vec)
-  node_encoding <- node_encoding(tree_vec)
   trees <- Map(
     function(tree, which_tree) {
       len <- tree_leaf_max_node(tree)
@@ -89,8 +82,7 @@ all_nodes <- function(tree_vec) {
           vctrs::vec_rep(which_tree, len + N),
           levels = hashes
         ),
-        tree = all_trees,
-        node_encoding = node_encoding
+        tree = all_trees
       )
     },
     tree = all_trees,
@@ -110,16 +102,16 @@ generate_inner_slice <- function(
   tree_vec, node_level = NULL,
   only_inner = TRUE
 ) {
+  ## TO DO - check functionality
+  ## after refactoring
   trees <- trees(tree_vec)
   nodes <- node_id(tree_vec)
   ind <- vctrs::vec_group_loc(tree_id(tree_vec))
   ind <- vctrs::vec_slice(ind, order(ind$key))
-  table_fn <- switch(node_encoding(tree_vec),
-    observation = function(nodes, tree) nodes,
-    order = function(nodes, tree) {
-      match(nodes, match(seq_len(length(tree$order)), tree$order))
-    }
-  )
+  table_fn <- function(nodes, tree) {
+    match(nodes, match(seq_len(length(tree$order)), tree$order))
+  }
+
   desc_id <- if (only_inner) {
     lapply(trees, node_inner)
   } else {
@@ -129,25 +121,23 @@ generate_inner_slice <- function(
   }
   desc <- mapply(
     function(nodes, tree, ind, desc_id) {
-      # desc are always encoded as observations
+      # desc are now encoded by other nodes
       desc <- node_descendants(tree)
       # convert nodes to observation encoding
       table <- data.frame(
-        node = table_fn(nodes, tree),
+        node = nodes,
         ind = ind
       )
       # match descendants obsv encoding to what we pulled
       lapply(desc[desc_id],
         \(desc, table) {
           vctrs::vec_slice(
-            table,
+            table$ind,
             which(table$node %in% desc)
           )
         },
         table = table
-      ) |>
-        # slice the indices by this mapping.
-        lapply(`[[`, "ind")
+      )
     },
     nodes = vctrs::vec_chop(nodes, ind$loc),
     tree = trees,
@@ -160,8 +150,7 @@ generate_inner_slice <- function(
     nodes = new_tree_vctr(
       node = vctrs::list_unchop(desc_id),
       which_tree = rep(seq_along(trees), sizes),
-      tree = trees,
-      node_encoding = node_encoding(tree_vec)
+      tree = trees
     ),
     children = vctrs::list_unchop(desc)
   )
@@ -257,8 +246,7 @@ child_nodes <- function(tree, times = 1L, remove_leaf = TRUE) {
   out <- new_pure_tree_vctr(
     node = vctrs::list_unchop(new_nodes),
     which_tree = rep(wt(tree), lns),
-    tree = trees(tree),
-    node_encoding = node_encoding(tree)
+    tree = trees(tree)
   )
   unique(out[!is.na(node_id(out))])
 }
@@ -317,14 +305,6 @@ node_parent.phylo <- function(tree, nodes, times = 1L, remove_top = TRUE) {
 
 #' @export
 parent_nodes <- function(tree, times = 1L, remove_top = TRUE) {
-  # merge_fn <- switch(node_encoding(tree),
-  #   observation = function(merge, order) {
-  #     merge
-  #   },
-  #   order = function(merge, order) {
-  #     match(merge, order)
-  #   }
-  # )
   new_nodes <- with_tree_vctr(
     tree,
     function(node, tree, times, remove_top) {
@@ -336,7 +316,6 @@ parent_nodes <- function(tree, times = 1L, remove_top = TRUE) {
   new_pure_tree_vctr(
     node = vctrs::vec_cast(new_nodes, integer()),
     which_tree = wt(tree),
-    tree = trees(tree),
-    node_encoding = node_encoding(tree)
+    tree = trees(tree)
   )
 }
