@@ -26,6 +26,87 @@ group_by_tree_nodes.data.frame <- function(
 }
 
 #' @export
+group_by_nodes <- function(x, ...) {
+  UseMethod("group_by_nodes")
+}
+
+#' @export
+group_by_nodes.data.frame <- function(x, ...) {
+  quos <- rlang::enquos(..., .named = TRUE)
+  result <- lapply(quos, rlang::eval_tidy, data = x)
+  groups <- nodes_grouped(result, data = x)
+  dplyr::new_grouped_df(x, groups = groups)
+}
+
+#' @export
+group_by_nodes.PlySummarizedExperiment <- function(x, ...) {
+  quos <- plyxp:::plyxp_quos(..., .ctx = c("assays", "rows", "cols"))
+  mask <- plyxp:::new_plyxp_manager(plyxp::se(x))
+  ctxs <- vapply(quos, attr, FUN.VALUE = "", which = "plyxp:::ctx")
+  nms <- names(quos)
+  mask <- plyxp:::plyxp_evaluate(mask, quos, ctxs, nms, rlang::caller_env())
+  results <- mask$results()
+  groups <- structure(
+    list(
+      row_groups = nodes_grouped_DF(
+        results$rows, SummarizedExperiment::rowData(x)
+      ),
+      col_groups = nodes_grouped_DF(
+        results$cols, SummarizedExperiment::colData(x)
+      )
+    ),
+    class = "plyxp_groups"
+  )
+  se_obj <- plyxp::se(x)
+  plyxp:::group_data_se_impl(se_obj) <- groups
+  plyxp::se(x) <- se_obj
+  x
+}
+
+nodes_grouped <- function(result, data) {
+  len <- length(result)
+  if (is.null(result) || len == 0L) {
+    return(NULL)
+  }
+  if (len > 1L) {
+    rlang::warn("`group_by_nodes()` should have one result per context. Using first.")
+  }
+  result <- result[[1L]]
+  ptype <- result[0L]
+  if (!inherits(ptype, "tree_vctr")) {
+    stop("`group_by_nodes()` should result in a `tree_vctr`")
+  }
+  pos <- base::Position(
+    \(obj) {
+      inherits(obj, "tree_vctr") && identical(obj[0], ptype)
+    },
+    x = data
+  )
+  if (is.na(pos)) {
+    stop("tree_vctr result does not match any data")
+  }
+  data <- data[pos]
+  generate_inner_slice(data[[1]],
+    node_level = result,
+    only_inner = FALSE
+  ) |>
+    dplyr::rename(
+      "{names(data)}" := nodes,
+      .indices = children
+    )
+}
+
+nodes_grouped_DF <- function(result, data) {
+  x <- nodes_grouped(result, data)
+  if (is.null(x)) {
+    return(NULL)
+  }
+  x |>
+    dplyr::mutate(.indices_group_id = seq_len(dplyr::n())) |>
+    methods::as("DFrame")
+}
+
+#' @export
 group_by_tree_nodes.PlySummarizedExperiment <- function(
   x, .by, ...,
   only_inner = TRUE,
