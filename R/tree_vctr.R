@@ -30,16 +30,15 @@ new_tree_vctr <- function(
     vctrs::vec_cast(which_tree, integer()),
     size = vctrs::vec_size(node)
   )
-  if (inherits(tree, "hclust")) {
+  if (is_tree_obj(tree)) {
     tree <- list(tree)
   }
 
   stopifnot(
-    "`tree` should be a list or an hclust object" = is.list(tree),
-    "all elements of `tree` should be an hclust object" = all(vapply(
+    "`tree` should be a list or an hclust/phylo object" = is.list(tree),
+    "all elements of `tree` should be an hclust/phylo object" = all(vapply(
       tree,
-      inherits,
-      what = "hclust",
+      is_tree_obj,
       FUN.VALUE = FALSE
     ))
   )
@@ -55,6 +54,9 @@ new_tree_vctr <- function(
 
 tree_vctr_class <- c("tree_vctr", "vctrs_rcrd", "vctrs_vctr")
 
+is_tree_obj <- function(obj) {
+  inherits(obj, "hclust") || inherits(obj, "phylo")
+}
 
 new_pure_tree_vctr <- function(
   node = integer(),
@@ -219,7 +221,12 @@ tree_vctr.hclust <- function(x) {
 
 #' @export
 tree_vctr.phylo <- function(x) {
-  tree_vctr(phylo_to_hclust(x))
+  desc <- x$edge[, 2]
+  new_tree_vctr(
+    node = desc[desc <= tree_leaf_max_node.phylo(x)],
+    which_tree = 1L,
+    tree = x
+  )
 }
 
 #' @export

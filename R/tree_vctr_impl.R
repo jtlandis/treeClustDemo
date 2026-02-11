@@ -52,8 +52,6 @@ node_encoding <- function(x) {
 }
 
 
-
-
 swap_node_encoding <- function(x) {
   node_encoding <- node_encoding(x)
   fn <- switch(node_encoding,
@@ -124,7 +122,7 @@ descendants <- function(x) {
       x,
       function(node, tree) {
         desc <- node_descendants(tree)
-        inner_seq <- inner_nodes(tree)
+        inner_seq <- node_inner(tree)
         desc[inner_seq] <- lapply(
           desc[inner_seq], match,
           table = tree$order

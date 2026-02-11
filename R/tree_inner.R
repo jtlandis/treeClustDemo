@@ -1,15 +1,100 @@
 #' @export
-inner <- function(tree_vec) {
-  trees <- lapply(
-    trees(tree_vec),
-    function(tree) {
-      new_tree_vctr(
-        node = inner_nodes(tree),
-        which_tree = 1L,
-        tree = list(tree),
-        node_encoding = node_encoding(tree_vec)
+root_nodes <- function(tree_vec) {
+  fct <- wt(tree_vec)
+  hashes <- levels(fct)
+  all_trees <- trees(tree_vec)
+  node_encoding <- node_encoding(tree_vec)
+  trees <- Map(
+    function(tree, which_tree) {
+      new_pure_tree_vctr(
+        node = vctrs::vec_cast(tree_top_node(tree), integer()),
+        which_tree = vctrs::new_factor(which_tree, levels = hashes),
+        tree = all_trees,
+        node_encoding = node_encoding
       )
-    }
+    },
+    tree = all_trees,
+    which_tree = seq_along(all_trees)
+  )
+
+  vctrs::vec_c(!!!trees, .ptype = tree_vec)
+}
+
+#' @export
+inner_nodes <- function(tree_vec) {
+  fct <- wt(tree_vec)
+  hashes <- levels(fct)
+  all_trees <- trees(tree_vec)
+  node_encoding <- node_encoding(tree_vec)
+  trees <- Map(
+    function(tree, which_tree) {
+      node <- vctrs::vec_cast(node_inner(tree), integer())
+      new_pure_tree_vctr(
+        node = node,
+        which_tree = vctrs::new_factor(
+          vctrs::vec_rep(which_tree, length(node)),
+          levels = hashes
+        ),
+        tree = all_trees,
+        node_encoding = node_encoding
+      )
+    },
+    tree = all_trees,
+    which_tree = seq_along(all_trees)
+  )
+  vctrs::vec_c(!!!trees, .ptype = tree_vec)
+}
+
+#' @export
+leaf_nodes <- function(tree_vec) {
+  fct <- wt(tree_vec)
+  hashes <- levels(fct)
+  all_trees <- trees(tree_vec)
+  node_encoding <- node_encoding(tree_vec)
+  trees <- Map(
+    function(tree, which_tree) {
+      len <- tree_leaf_max_node(tree)
+      node <- seq_len(len)
+      new_pure_tree_vctr(
+        node = node,
+        which_tree = vctrs::new_factor(
+          vctrs::vec_rep(which_tree, len),
+          levels = hashes
+        ),
+        tree = all_trees,
+        node_encoding = node_encoding
+      )
+    },
+    tree = all_trees,
+    which_tree = seq_along(all_trees)
+  )
+  vctrs::vec_c(!!!trees, .ptype = tree_vec)
+}
+
+
+#' @export
+all_nodes <- function(tree_vec) {
+  fct <- wt(tree_vec)
+  hashes <- levels(fct)
+  all_trees <- trees(tree_vec)
+  node_encoding <- node_encoding(tree_vec)
+  trees <- Map(
+    function(tree, which_tree) {
+      len <- tree_leaf_max_node(tree)
+      N <- tree_n_inner_node(tree)
+      node <- seq_len(len + N)
+      new_pure_tree_vctr(
+        node = node,
+        which_tree = vctrs::new_factor(
+          vctrs::vec_rep(which_tree, len + N),
+          levels = hashes
+        ),
+        tree = all_trees,
+        node_encoding = node_encoding
+      )
+    },
+    tree = all_trees,
+    which_tree = seq_along(all_trees)
   )
   vctrs::vec_c(!!!trees, .ptype = tree_vec)
 }
@@ -36,7 +121,7 @@ generate_inner_slice <- function(
     }
   )
   desc_id <- if (only_inner) {
-    lapply(trees, inner_nodes)
+    lapply(trees, node_inner)
   } else {
     lapply(trees, function(tree) {
       seq_along(node_descendants(tree))
@@ -97,44 +182,76 @@ generate_inner_slice <- function(
   tbl
 }
 
+node_child <- function(tree, nodes, times = 1L, remove_leaf = TRUE) {
+  UseMethod("node_child", tree)
+}
+
+#' @noRd
+#' @exportS3Method
+node_child.hclust <- function(tree, nodes, times = 1L, remove_leaf = TRUE) {
+  merge <- tree$merge
+  n <- length(tree$order)
+  is_leaf <- merge < 0
+  node_is_leaf <- function(node) {
+    node <= n | is.na(node)
+  }
+  # assuming order encoding
+  merge[is_leaf] <- match(-merge[is_leaf], tree$order)
+  merge[!is_leaf] <- merge[!is_leaf] + n
+  nodes <- as.list(nodes)
+  while (times > 0) {
+    times <- times - 1L
+    nodes <- lapply(nodes, function(node) {
+      is_leaf <- node_is_leaf(node)
+      nodes <- as.list(node)
+      if (remove_leaf && any(is_leaf)) {
+        nodes[is_leaf] <- NA_integer_
+      }
+      nodes[!is_leaf] <- vctrs::vec_chop(
+        merge[node[!is_leaf] - n, , drop = FALSE]
+      )
+      vctrs::list_unchop(lapply(nodes, as.vector))
+    })
+  }
+  nodes
+}
+
+#' @noRd
+#' @exportS3Method
+node_child.phylo <- function(tree, nodes, times = 1L, remove_leaf = TRUE) {
+  edge <- tree$edge
+  ansc <- edge[, 1]
+  desc <- edge[, 2]
+  data <- vctrs::vec_split(desc, ansc)
+  n <- tree_leaf_max_node.phylo(tree)
+  node_is_leaf <- function(node) {
+    node <= n | is.na(node)
+  }
+  nodes <- as.list(nodes)
+  while (times > 0) {
+    times <- times - 1L
+    nodes <- lapply(nodes, function(node) {
+      is_leaf <- node_is_leaf(node)
+      nodes <- as.list(node)
+      if (remove_leaf && any(is_leaf)) {
+        nodes[is_leaf] <- NA_integer_
+      }
+      nodes[!is_leaf] <- data$val[match(as.vector(nodes[!is_leaf]), data$key)]
+      vctrs::vec_unchop(nodes)
+    })
+  }
+  nodes
+}
+
 #' @export
 child_nodes <- function(tree, times = 1L, remove_leaf = TRUE) {
-  merge_fn <- switch(node_encoding(tree),
-    observation = function(merge, order) {
-      merge
-    },
-    order = function(merge, order) {
-      match(merge, order)
-    }
-  )
   new_nodes <- with_tree_vctr(
     tree,
-    function(node, tree, ...) {
-      merge <- tree$merge
-      n <- length(tree$order)
-      is_leaf <- merge < 0
-      node_is_leaf <- function(node) {
-        node <= n | is.na(node)
-      }
-      merge[is_leaf] <- merge_fn(-merge[is_leaf], tree$order)
-      merge[!is_leaf] <- merge[!is_leaf] + n
-      nodes <- as.list(node)
-      while (times > 0) {
-        times <- times - 1L
-        nodes <- lapply(nodes, function(node) {
-          is_leaf <- node_is_leaf(node)
-          nodes <- as.list(node)
-          if (remove_leaf && any(is_leaf)) {
-            nodes[is_leaf] <- NA_integer_
-          }
-          nodes[!is_leaf] <- vctrs::vec_chop(
-            merge[node[!is_leaf] - n, , drop = FALSE]
-          )
-          vctrs::list_unchop(lapply(nodes, as.vector))
-        })
-      }
-      nodes
-    }
+    function(node, tree, times, remove_leaf) {
+      node_child(tree, nodes = node, times = times, remove_leaf = remove_leaf)
+    },
+    time = times,
+    remove_leaf = remove_leaf
   )
   lns <- lengths(new_nodes)
   out <- new_pure_tree_vctr(
@@ -146,44 +263,78 @@ child_nodes <- function(tree, times = 1L, remove_leaf = TRUE) {
   unique(out[!is.na(node_id(out))])
 }
 
+node_parent <- function(tree, nodes, times = 1L, remove_top = TRUE) {
+  UseMethod("node_parent")
+}
+
+#' @noRd
+#' @exportS3Method
+node_parent.hclust <- function(tree, nodes, times = 1L, remove_top = TRUE) {
+  merge <- tree$merge
+  n <- length(tree$order)
+  n_inner <- n - 1L
+  N <- n + n_inner
+  is_leaf <- merge < 0
+  node_is_gparent <- function(node) {
+    node >= N | is.na(node)
+  }
+  merge[is_leaf] <- match(-merge[is_leaf], tree$order)
+  merge[!is_leaf] <- merge[!is_leaf] + n
+  while (times > 0) {
+    times <- times - 1L
+    is_gparent <- node_is_gparent(node)
+    if (remove_top && any(is_gparent)) {
+      node[is_gparent] <- NA_integer_
+    }
+    node[!is_gparent] <- (match(node[!is_gparent], merge) - 1L) %%
+      n_inner + 1L + n
+  }
+  node
+}
+
+#' @noRd
+#' @exportS3Method
+node_parent.phylo <- function(tree, nodes, times = 1L, remove_top = TRUE) {
+  edge <- tree$edge
+  ansc <- edge[, 1]
+  desc <- edge[, 2]
+  data <- vctrs::vec_split(desc, ansc)
+  N <- tree_top_node(tree)
+  node_is_gparent <- function(node) {
+    node == N | is.na(node)
+  }
+  while (times > 0) {
+    times <- times - 1L
+    is_gparent <- node_is_gparent(nodes)
+    if (remove_top && any(is_gparent)) {
+      nodes[is_gparent] <- NA_integer_
+    }
+    # get parent from desc....
+    nodes[!is_gparent] <- ansc[match(nodes[!is_gparent], desc)]
+  }
+  nodes
+}
 
 #' @export
 parent_nodes <- function(tree, times = 1L, remove_top = TRUE) {
-  merge_fn <- switch(node_encoding(tree),
-    observation = function(merge, order) {
-      merge
-    },
-    order = function(merge, order) {
-      match(merge, order)
-    }
-  )
+  # merge_fn <- switch(node_encoding(tree),
+  #   observation = function(merge, order) {
+  #     merge
+  #   },
+  #   order = function(merge, order) {
+  #     match(merge, order)
+  #   }
+  # )
   new_nodes <- with_tree_vctr(
     tree,
-    function(node, tree, ...) {
-      merge <- tree$merge
-      n <- length(tree$order)
-      n_inner <- n - 1L
-      N <- n + n_inner
-      is_leaf <- merge < 0
-      node_is_gparent <- function(node) {
-        node >= N | is.na(node)
-      }
-      merge[is_leaf] <- merge_fn(-merge[is_leaf], tree$order)
-      merge[!is_leaf] <- merge[!is_leaf] + n
-      while (times > 0) {
-        times <- times - 1L
-        is_gparent <- node_is_gparent(node)
-        if (remove_top && any(is_gparent)) {
-          node[is_gparent] <- NA_integer_
-        }
-        node[!is_gparent] <- (match(node[!is_gparent], merge) - 1L) %%
-          n_inner + 1L + n
-      }
-      node
-    }
+    function(node, tree, times, remove_top) {
+      node_parent(tree, nodes = node, times = times, remove_top = remove_top)
+    },
+    time = times,
+    remove_top = remove_top
   )
   new_pure_tree_vctr(
-    node = new_nodes,
+    node = vctrs::vec_cast(new_nodes, integer()),
     which_tree = wt(tree),
     tree = trees(tree),
     node_encoding = node_encoding(tree)
