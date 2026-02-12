@@ -63,18 +63,18 @@ group_by_nodes.PlySummarizedExperiment <- function(x, ...) {
   x
 }
 
-nodes_grouped <- function(result, data) {
-  len <- length(result)
-  if (is.null(result) || len == 0L) {
+nodes_grouped <- function(results, data) {
+  len <- length(results)
+  if (is.null(results) || len == 0L) {
     return(NULL)
   }
-  if (len > 1L) {
-    rlang::warn("`group_by_nodes()` should have one result per context. Using first.")
-  }
-  result <- result[[1L]]
+  # if (len > 1L) {
+  #   rlang::warn("`group_by_nodes()` should have one result per context. Using first.")
+  # }
+  result <- results[[1L]]
   ptype <- result[0L]
   if (!inherits(ptype, "tree_vctr")) {
-    stop("`group_by_nodes()` should result in a `tree_vctr`")
+    stop("`group_by_nodes()` first result should be a `tree_vctr`")
   }
   pos <- base::Position(
     \(obj) {
@@ -85,15 +85,28 @@ nodes_grouped <- function(result, data) {
   if (is.na(pos)) {
     stop("tree_vctr result does not match any data")
   }
-  data <- data[pos]
-  generate_inner_slice(data[[1]],
+  tree_data <- data[pos]
+  tree_groups <- generate_inner_slice(tree_data[[1]],
     node_level = result,
     only_inner = FALSE
   ) |>
     dplyr::rename(
-      "{names(data)}" := nodes,
+      "{names(tree_data)}" := nodes,
       .indices = children
     )
+  if (len > 1) {
+    # process the rest of the group data
+    # this should probably be biocmask::bioc_group_loc()
+    other_groups <- dplyr::group_by(tibble::as_tibble(data[-pos]), !!!(results[-1L])) |>
+      dplyr::group_data()
+    tree_groups <- dplyr::full_join(
+      tidyr::unnest(tree_groups, .indices),
+      tidyr::unnest(other_groups, .rows),
+      by = c(".indices" = ".rows")
+    ) |>
+      dplyr::summarize(.indices = list(.indices), .by = -.indices)
+  }
+  tree_groups
 }
 
 nodes_grouped_DF <- function(result, data) {
