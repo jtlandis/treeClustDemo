@@ -91,6 +91,118 @@ all_nodes <- function(tree_vec) {
   vctrs::vec_c(!!!trees, .ptype = tree_vec)
 }
 
+#' @param tree_vec the source of truth which is used to express indices
+#' @param node_level Some subset of `tree_vec`
+node_level_ind <- function(
+  tree_vec,
+  node_level
+) {
+  ptype <- vctrs::vec_ptype2(tree_vec, node_level)
+  node_level <- vctrs::vec_cast(node_level, ptype)
+  tree_vec <- vctrs::vec_cast(tree_vec, ptype)
+  node_level <- vctrs::vec_unique(node_level)
+  ind <- vctrs::vec_split(node_level, wt(node_level))
+  ind <- vctrs::vec_slice(ind, order(ind$key))
+  src <- tibble::tibble(
+    tree = tree_vec,
+    id = seq_along(tree)
+  )
+  # keep only data/indices that have the same tree ids as node_level
+  src <- dplyr::filter(src, wt(tree) %in% ind$key)
+  src <- vctrs::vec_split(src, wt(src$tree))
+  ind <- dplyr::filter(ind, key %in% src$key)
+  src <- vctrs::vec_slice(src, vctrs::vec_match(src$key, ind$key))
+  trees <- trees(node_level)[as.integer(ind$key)]
+  # these two vectors are aligned
+  out <- Map(
+    # @param tree a hclust/phylo
+    # @param target_level tree_vctr of nodes we want to find
+    # @param src_table tibble(tree: tree_vec, id: integer) indicates what data
+    # is available
+    function(tree, target_level, src_table) {
+      desc_cache <- node_descendants(tree)
+      tibble::tibble(node = target_level) |>
+        dplyr::rowwise() |>
+        dplyr::mutate(
+          .rows = find_desc(
+            target = node, table = src_table, cache = desc_cache
+          ) |> list()
+        ) |>
+        dplyr::ungroup()
+    },
+    tree = trees,
+    target_level = ind$val,
+    src_table = src$val
+  )
+  dplyr::bind_rows(!!!out)
+}
+
+#' @param target a scalar tree_vctr target node
+#' @param table a tibble(tree: tree_vctr, id: integer) object of source
+#' data nodes and indices
+#' @param cache a list for the associated tree where each element contains
+#' an integer vector of leaf nodes that construct that node
+find_desc <- function(target, table, cache) {
+  # UseMethod("find_desc")
+  target_nodes <- cache[[node_id(target)]]
+  # represents all leaf nodes
+  nodes <- vctrs::vec_rep(target, length(target_nodes))
+  node_id(nodes) <- target_nodes
+
+  # logical vector of desc leafs that exist in table
+  found <- vctrs::vec_in(nodes, table$tree)
+  which_tab <- which(vctrs::vec_in(table$tree, nodes))
+  # if everything exist in data we are done
+  if (all(found)) {
+    return(vctrs::vec_slice(table$id, which_tab))
+  }
+
+  while (TRUE) {
+    # if not, construct nodes not found
+    nodes <- nodes[!found]
+    # get their unique parents
+    nodes <- vctrs::vec_unique(parent_nodes(nodes))
+
+    # if we got to the top and tried to find its parent
+    # then this data set cannot construct the full set...
+    if (vctrs::vec_size(nodes) == 1L && is.na(node_id(nodes))) {
+      return(integer())
+    }
+
+    # check again what exists
+    found <- vctrs::vec_in(nodes, table$tree)
+
+    if (any(found)) {
+      # for each found node, check its children and remove it from the table
+      children <- child_nodes(nodes[found])
+      # very inefficent for loop... but I think it works?
+      while (length(children) > 0) {
+        new_tab <- which(vctrs::vec_in(table$tree, children))
+        which_tab <- which_tab[!which_tab %in% new_tab]
+        children <- child_nodes(children, remove_leaf = TRUE)
+      }
+
+      which_tab <- c(which_tab, which(vctrs::vec_in(table$tree, nodes)))
+    }
+    if (all(found)) {
+      return(vctrs::vec_slice(table$id, which_tab))
+    }
+  }
+}
+
+# find_desc.hclust <- function(tree, target, table, cache) {
+
+#   merge <- tree$merge
+#   n <- length(tree$order)
+#   is_leaf <- merge < 0
+#   merge[is_leaf] <- -merge[is_leaf]
+#   merge[!is_leaf] <- merge[!is_leaf] + n
+#   N <- n + n - 1L
+
+#   targets <- integer(N)
+#   targets[1] <- target
+#   for ()
+# }
 
 #' creates a data.frame that maps inner_nodes
 #' to the indices of the input tree_vctr. Note
@@ -270,14 +382,14 @@ node_parent.hclust <- function(tree, nodes, times = 1L, remove_top = TRUE) {
   merge[!is_leaf] <- merge[!is_leaf] + n
   while (times > 0) {
     times <- times - 1L
-    is_gparent <- node_is_gparent(node)
+    is_gparent <- node_is_gparent(nodes)
     if (remove_top && any(is_gparent)) {
-      node[is_gparent] <- NA_integer_
+      nodes[is_gparent] <- NA_integer_
     }
-    node[!is_gparent] <- (match(node[!is_gparent], merge) - 1L) %%
+    nodes[!is_gparent] <- (match(nodes[!is_gparent], merge) - 1L) %%
       n_inner + 1L + n
   }
-  node
+  nodes
 }
 
 #' @noRd
