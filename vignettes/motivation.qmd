@@ -7,6 +7,7 @@ author: Justin Landis
 library(TreeSummarizedExperiment)
 library(plyxp)
 library(treeClustDemo)
+library(ggtree)
 ```
 
 ### Data Setup
@@ -14,17 +15,17 @@ library(treeClustDemo)
 ```{r}
 set.seed(42)
 se <- SummarizedExperiment(
-  assays = list(counts = matrix(rpois(10000, 10), 1000, 10)),
+  assays = list(counts = matrix(rpois(1000000, 10), 10000, 100)),
   rowData = DataFrame(
-    feature = sprintf("f%04i", 1:1000),
-    length = sample(1e3:1e5, 1000, replace = TRUE)
+    feature = sprintf("f%04i", 1:10000),
+    length = sample(1e3:1e5, 10000, replace = TRUE)
   ),
   colData = DataFrame(
-    sample = sprintf("s%02i", 1:10)
+    sample = sprintf("s%02i", 1:100)
   )
 )
 
-.rowtree <- ape::rtree(1000)
+.rowtree <- ape::rtree(10000)
 tse <- TreeSummarizedExperiment(
   assays = assays(se),
   rowData = rowData(se),
@@ -32,6 +33,12 @@ tse <- TreeSummarizedExperiment(
   rowTree = .rowtree,
   rowNodeLab = sample(.rowtree$tip.label)
 )
+
+ggtree(.rowtree, size = 2, branch.length = "none") +
+    geom_text2(aes(label = node), color = "darkblue",
+               hjust = -0.5, vjust = 0.7, size = 5.5) +
+    geom_text2(aes(label = label), color = "darkorange",
+               hjust = -0.1, vjust = -0.7, size = 5.5)
 ```
 
 ## The Goal
@@ -39,11 +46,10 @@ tse <- TreeSummarizedExperiment(
 Provide some tidyomics styled abstraction over `TreeSummarizedExperiment` (`treeSE`). 
 As noted from a prior meeting, the main utility for `treeSE` 
 <!-- perhaps there are other utilities that I am unware of -->
-is the ability to not only store and map arbitrary trees to the rows or columns of the `SummarizedExperiment` (`SE`), but also provide utility functions for summarizing data to some level of the tree nodes.
+is the ability to not only store and map arbitrary trees to the rows or columns of the `SummarizedExperiment` (`SE`), but also provide utility functions for extracting data by nodes or summarizing data to some level of the internal tree nodes.
 
 In tidyomics, there are two stylings to approach this abstraction.
-We could apply the relaxed styling of `TidySummarizedExperiment` (`tidySE`) or we could approach from a more verbose styling of `plyxp`.
-Given my bias, I will be demonstrating the approach from `plyxp`
+We could apply the relaxed styling of `TidySummarizedExperiment` (`tidySE`) or we could approach from a more verbose styling of `plyxp`. I will be demonstrating the approach from `plyxp`
 
 ## Background `treeSE`
 
@@ -103,11 +109,12 @@ This differs from `treeSE` in that the `LinkDataFrame` and the `rowTree()` list 
 By themselves, they are not informative.
 The `tree_vctr` abstracts this metadata as a stand-alone vector that can be used by composition with any standard `SE` object.
 
-::: {.callout-warning}
+::: {.callout-note}
 
-At the moment, `tree_vctr` only works with `hclust` objects as our use case involves this type of clustering.
-This is also differs from `treeSE` in that the expected tree structure must be a `phylo` object.
-We may be able to make this vector class agnostic towards the trees it holds.
+node labeling between hclust and phylo objects are not consistant.
+In phylo objects, integers in the `edge` field represents the node identifiers.
+In hclust objects, integers in the `merge` field encode observations of the input data, and node ids are calculated by doing `match(merge, hc$order)`.
+Internal nodes in hclust objects are also ordered based on height, thus the "root" or top parent always has the largest node id.
 
 :::
 
@@ -128,10 +135,74 @@ node_id(.tvec) # get node id
 tree(.tvec) # expects only 1 tree
 trees(.tvec) # returns all trees
 is_inner(.tvec) #logical vector if node is inner node
-tail(inner(.tvec)) # for each tree, generate all inner nodes
+tail(inner_nodes(.tvec)) # for each tree, generate all inner nodes
 .parent <- parent_nodes(.tvec) # get the parent of a node
 .parent
-child_nodes(.parent) # get both children from a parent
+child_nodes(.parent) # get children from a parent
 ```
 
+## Benchmarking against `aggTSE`
+
+```{r}
+## Get a list of all node IDs
+all_tse_nodes <- showNode(tree = rowTree(tse), only.leaf = FALSE)
+```
+
+```{r}
+## Calculate counts for internal nodes
+agg_tse <- aggTSE(x = tse, rowLevel = all_tse_nodes, rowFun = sum)
+agg_tse |> assay() |> head()
+
+## treeClustDemo provides a helper grouping function
+#  group_by_nodes, which helps specify the node level to group at
+
+xp <- new_plyxp(se)
+xp |>
+  group_by_nodes(rows(all_nodes(tree))) |>
+  summarize(counts = colSums(counts)) |>
+  pull(counts) |>
+  head()
+
+```
+
+
+```{r}
+bench::mark(
+  aggTSE = aggTSE(x = tse, rowLevel = all_tse_nodes, rowFun = sum),
+  plyxp = xp |>
+    group_by_nodes(rows(all_nodes(tree))) |>
+    summarize(counts = colSums(counts)),
+  check = FALSE,
+  memory = FALSE
+)
+
+microbenchmark::microbenchmark(
+  aggTSE = aggTSE(x = tse, rowLevel = all_tse_nodes, rowFun = sum),
+  plyxp = xp |>
+    group_by_nodes(rows(all_nodes(tree))) |>
+    summarize(counts = colSums(counts)),
+  times = 10L
+)
+```
+
+
+```{r}
+print(xp)
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
+  summarize(counts = colSums(counts))
+print(xp)
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
+  summarize(counts = colSums(counts))
+print(xp)
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
+  summarize(counts = colSums(counts))
+print(xp)
+```
 # end
+
+<!-- motivatoin includes doing internal node aggregation.
+ IN order to do group_by() |> mutate() callins in plyxp, we needed a way
+ to retrieve a tree and have it mapped to an observation
+ 
+ our options were to construct binding for TSE, add bindings for metadata slot, or just make a new vector
+ -->
