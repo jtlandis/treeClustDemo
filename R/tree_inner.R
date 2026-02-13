@@ -104,12 +104,13 @@ node_level_ind <- function(
   ind <- vctrs::vec_split(node_level, wt(node_level))
   ind <- vctrs::vec_slice(ind, order(ind$key))
   src <- tibble::tibble(
-    tree = tree_vec,
-    id = seq_along(tree)
+    node_id = node_id(tree_vec),
+    wt = wt(tree_vec),
+    id = seq_along(node_id)
   )
   # keep only data/indices that have the same tree ids as node_level
-  src <- dplyr::filter(src, wt(tree) %in% ind$key)
-  src <- vctrs::vec_split(src, wt(src$tree))
+  src <- dplyr::filter(src, wt %in% ind$key)
+  src <- vctrs::vec_split(src, src$wt)
   ind <- dplyr::filter(ind, key %in% src$key)
   src <- vctrs::vec_slice(src, vctrs::vec_match(src$key, ind$key))
   trees <- trees(node_level)[as.integer(ind$key)]
@@ -121,11 +122,33 @@ node_level_ind <- function(
     # is available
     function(tree, target_level, src_table) {
       desc_cache <- node_descendants(tree)
-      tibble::tibble(node = target_level) |>
+      child_fn <- function(tree) {
+        fn <- if (inherits(tree, "phylo")) {
+          node_child.phylo
+        } else {
+          node_child.hclust
+        }
+        function(node) {
+          fn(tree = tree, nodes = node)
+        }
+      }
+
+      parent_fn <- function(tree) {
+        fn <- if (inherits(tree, "phylo")) {
+          node_parent.phylo
+        } else {
+          node_parent.hclust
+        }
+        function(node) {
+          fn(tree = tree, nodes = node)
+        }
+      }
+      tibble::tibble(node = target_level, node_id = node_id(node)) |>
         dplyr::rowwise() |>
         dplyr::mutate(
           .rows = find_desc(
-            target = node, table = src_table, cache = desc_cache
+            target = node_id, table = src_table, cache = desc_cache,
+            parent_node_fn = parent_fn, child_node_fn = child_fn
           ) |> list()
         ) |>
         dplyr::ungroup()
@@ -137,52 +160,55 @@ node_level_ind <- function(
   dplyr::bind_rows(!!!out)
 }
 
-#' @param target a scalar tree_vctr target node
-#' @param table a tibble(tree: tree_vctr, id: integer) object of source
+#' @param target a scalar integer from a tree_vctr target node
+#' @param table a tibble(node_id: node_id(tree_vctr), id: integer) object of source
 #' data nodes and indices
 #' @param cache a list for the associated tree where each element contains
 #' an integer vector of leaf nodes that construct that node
-find_desc <- function(target, table, cache) {
+find_desc <- function(target, table, cache, parent_node_fn, child_node_fn) {
   # UseMethod("find_desc")
-  target_nodes <- cache[[node_id(target)]]
+  target_nodes <- cache[[target]]
   # represents all leaf nodes
-  nodes <- vctrs::vec_rep(target, length(target_nodes))
-  node_id(nodes) <- target_nodes
+  nodes <- target_nodes
+
 
   # logical vector of desc leafs that exist in table
-  found <- vctrs::vec_in(nodes, table$tree)
-  which_tab <- which(vctrs::vec_in(table$tree, nodes))
+  # match_ind <- match(nodes, table$node_id, nomatch = 0L)
+  found <- vctrs::vec_in(nodes, table$node_id)
+  which_tab <- vctrs::vec_in(table$node_id, nodes)
+
   # if everything exist in data we are done
   if (all(found)) {
-    return(vctrs::vec_slice(table$id, which_tab))
+    return(table$id[which_tab])
   }
 
   while (TRUE) {
     # if not, construct nodes not found
     nodes <- nodes[!found]
     # get their unique parents
-    nodes <- vctrs::vec_unique(parent_nodes(nodes))
+    nodes <- vctrs::vec_unique(parent_node_fn(nodes))
 
     # if we got to the top and tried to find its parent
     # then this data set cannot construct the full set...
-    if (vctrs::vec_size(nodes) == 1L && is.na(node_id(nodes))) {
+    if (vctrs::vec_size(nodes) == 1L && is.na(nodes)) {
       return(integer())
     }
 
     # check again what exists
-    found <- vctrs::vec_in(nodes, table$tree)
+    found <- vctrs::vec_in(nodes, table$node_id)
 
     if (any(found)) {
       # for each found node, check its children and remove it from the table
-      children <- child_nodes(nodes[found])
+      children <- child_node_fn(nodes[found])
       # very inefficent for loop... but I think it works?
       while (length(children) > 0) {
-        new_tab <- which(vctrs::vec_in(table$tree, children))
-        which_tab <- which_tab[!which_tab %in% new_tab]
-        children <- child_nodes(children, remove_leaf = TRUE)
+        child_tab <- !table$node_id %in% children
+        which_tab <- which_tab & child_tab
+        # new_tab <- which(vctrs::vec_in(table$node_id, children))
+        # which_tab <- which_tab[!which_tab %in% new_tab]
+        children <- child_node_fn(children)
       }
-
-      which_tab <- c(which_tab, which(vctrs::vec_in(table$tree, nodes)))
+      which_tab <- which_tab & (table$node_id %in% nodes)
     }
     if (all(found)) {
       return(vctrs::vec_slice(table$id, which_tab))
