@@ -86,13 +86,13 @@ nodes_grouped <- function(results, data) {
     stop("tree_vctr result does not match any data")
   }
   tree_data <- data[pos]
-  tree_groups <- generate_inner_slice(tree_data[[1]],
-    node_level = result,
-    only_inner = FALSE
+  tree_groups <- node_level_ind(
+    tree_vec = tree_data[[1]],
+    node_level = result
   ) |>
     dplyr::rename(
-      "{names(tree_data)}" := nodes,
-      .indices = children
+      "{names(tree_data)}" := node,
+      .indices = .rows
     )
   if (len > 1) {
     # process the rest of the group data

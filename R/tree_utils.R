@@ -46,17 +46,25 @@ with_descendants.phylo <- function(tree) {
   node_end <- n + tree$Nnode
   children <- vector("list", length = node_end)
   seq_n <- seq_len(n)
+  known <- logical(node_end)
   children[seq_n] <- as.list(seq_n)
-  query_ind <- which(desc <= n)
-  while (length(query_ind)) {
-    qeury <- desc[query_ind]
-    aquery <- ansc[query_ind]
-    parents <- unique(aquery)
-    for (p in parents) {
-      child_ind <- qeury[aquery == p]
-      children[[p]] <- unlist(children[child_ind])
+  known[seq_n] <- TRUE
+  ans_ind <- vctrs::vec_group_loc(ansc)
+  ans_i <- nrow(ans_ind)
+  while (ans_i > 0) {
+    flag_rm <- logical(ans_i)
+    for (i in seq_len(ans_i)) {
+      target <- ans_ind$key[i]
+      these_desc <- desc[ans_ind$loc[[i]]]
+      if (any(!known[these_desc])) {
+        next
+      }
+      flag_rm[i] <- TRUE
+      known[target] <- TRUE
+      children[[target]] <- unlist(children[these_desc])
     }
-    query_ind <- which(desc %in% parents)
+    ans_ind <- ans_ind[!flag_rm, ]
+    ans_i <- nrow(ans_ind)
   }
   tree$descendants <- children
   tree

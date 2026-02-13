@@ -87,7 +87,7 @@ all_nodes <- function(tree_vec) {
     },
     tree = all_trees,
     which_tree = seq_along(all_trees)
-  )
+  ) |> unname()
   vctrs::vec_c(!!!trees, .ptype = tree_vec)
 }
 
