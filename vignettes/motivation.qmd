@@ -3,6 +3,37 @@ title: Tree Aggregation with plyxp and tree_vctr
 author: Justin Landis
 ---
 
+## Motivation
+
+![The [treeClimbR paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC8127214/) Figure 1.](./treeClimbR.png)
+
+::: columns
+
+::: {.column width="70%"}
+![](./Overview-bindings.png)
+:::
+
+::: {.column width="10%"}
+:::
+
+::: {.column width="20%"}
+![](./plyxp_hexsticker2.png){width="100"}
+:::
+
+:::
+
+```r
+xp |>
+  group_by(
+    rows(gene_id)
+  ) |>
+  mutate(
+    rows(
+      tree = cluster_transcripts(trans) |> ...
+    )
+  )
+```
+
 ```{r package setup, message=FALSE, warning=FALSE}
 library(TreeSummarizedExperiment)
 library(plyxp)
@@ -14,18 +45,20 @@ library(ggtree)
 
 ```{r}
 set.seed(42)
+nfeat <- 1000L
+nsamp <- 10L
 se <- SummarizedExperiment(
-  assays = list(counts = matrix(rpois(1000000, 10), 10000, 100)),
+  assays = list(counts = matrix(rpois(nfeat * nsamp, 10), nfeat, nsamp)),
   rowData = DataFrame(
-    feature = sprintf("f%04i", 1:10000),
-    length = sample(1e3:1e5, 10000, replace = TRUE)
+    feature = sprintf("f%04i", seq_len(nfeat)),
+    length = sample(1e3:1e5, nfeat, replace = TRUE)
   ),
   colData = DataFrame(
-    sample = sprintf("s%02i", 1:100)
+    sample = sprintf("s%02i", seq_len(nsamp))
   )
 )
 
-.rowtree <- ape::rtree(10000)
+.rowtree <- ape::rtree(nfeat)
 tse <- TreeSummarizedExperiment(
   assays = assays(se),
   rowData = rowData(se),
@@ -151,7 +184,7 @@ all_tse_nodes <- showNode(tree = rowTree(tse), only.leaf = FALSE)
 ```{r}
 ## Calculate counts for internal nodes
 agg_tse <- aggTSE(x = tse, rowLevel = all_tse_nodes, rowFun = sum)
-agg_tse |> assay() |> head()
+agg_tse |> assay() |> _[1:5, 1:5]
 
 ## treeClustDemo provides a helper grouping function
 #  group_by_nodes, which helps specify the node level to group at
@@ -161,7 +194,7 @@ xp |>
   group_by_nodes(rows(all_nodes(tree))) |>
   summarize(counts = colSums(counts)) |>
   pull(counts) |>
-  head()
+  _[1:5, 1:5]
 
 ```
 
@@ -187,9 +220,6 @@ microbenchmark::microbenchmark(
 
 
 ```{r}
-print(xp)
-xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
-  summarize(counts = colSums(counts))
 print(xp)
 xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
   summarize(counts = colSums(counts))
