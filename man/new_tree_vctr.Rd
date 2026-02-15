@@ -4,12 +4,7 @@
 \alias{new_tree_vctr}
 \title{a tree_vctr object}
 \usage{
-new_tree_vctr(
-  node = integer(),
-  which_tree = integer(),
-  tree,
-  node_encoding = c("order", "observation")
-)
+new_tree_vctr(node = integer(), which_tree = integer(), tree)
 }
 \arguments{
 \item{node}{an integer vector represeting some encoded node id}
@@ -18,20 +13,13 @@ new_tree_vctr(
 tree in the \code{tree} attribute}
 
 \item{tree}{a list of \code{hclust} objects}
-
-\item{node_encoding}{character scalar of how this object's node is encoded.
-The default, "order", will encode nodes according to how observations are
-ordered in the respective \code{hclust} object. The alternative, "observation",
-will encode nodes according to the original observation indices used to
-generate the hclust object. These options only affect leaf nodes, as
-internal nodes will always be encoded by the height of the hclust.}
 }
 \description{
 This object allows a way to encode many heirachical objects along with
 the rows of a matrix-like object. Each element of a \code{tree_vctr} object
 will have a node id and a tree id, which together identify a specific
 observation within the \code{hclust} object stored in the \code{tree} attribute.
-The node id may be encoded in two ways, which mainly provide convience
+DEFUNCT: The node id may be encoded in two ways, which mainly provide convience
 with sorting this vector according to either the order of observations
 or an order that would cluster the observations per hclust object.
 }

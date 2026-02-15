@@ -92,25 +92,32 @@ pull_tse <- function(tse, which = c("row", "col")) {
     which_dim,
     col = {
       lnks <- colLinks(tse)
-      trees <- colTree(tse, whichTree = NULL) |> lapply(tree_vctr)
+      trees <- colTree(tse, whichTree = NULL)
     },
     row = {
       lnks <- rowLinks(tse)
-      trees <- rowTree(tse, whichTree = NULL) |> lapply(tree_vctr)
+      trees <- rowTree(tse, whichTree = NULL) 
     }
   )
-  chops <- vctrs::vec_group_loc(lnks$whichTree)
-  tree_labels <- vctrs::vec_chop(lnks$nodeLab, indices = chops$loc)
-  trees <- trees[match(names(trees), chops$key)]
-  mapply(\(labels, tree_ptype) {
-    hc <- tree(tree_ptype)
-    new_tree_vctr(
-      node = match(labels, hc$labels),
-      which_tree = 1L,
-      tree = list(hc)
-    )
-  }, labels = tree_labels, tree_ptype = trees, SIMPLIFY = FALSE) |>
-  vctrs::list_unchop(indices = chops$loc)
+  which_tree <- match(lnks$whichTree, names(trees))
+  node_id <- lnks$nodeNum
+  new_tree_vctr(
+    node = node_id,
+    which_tree = which_tree,
+    tree = trees
+  )
+  # chops <- vctrs::vec_group_loc(lnks$whichTree)
+  # tree_labels <- vctrs::vec_chop(lnks$nodeNum, indices = chops$loc)
+  # trees <- trees[match(names(trees), chops$key)]
+  # mapply(\(labels, tree_ptype) {
+  #   hc <- tree(tree_ptype)
+  #   new_tree_vctr(
+  #     node = match(labels, hc$labels),
+  #     which_tree = 1L,
+  #     tree = list(hc)
+  #   )
+  # }, labels = tree_labels, tree_ptype = trees, SIMPLIFY = FALSE) |>
+  # vctrs::list_unchop(indices = chops$loc)
 }
 
 
@@ -156,9 +163,8 @@ pull(xp, cols(tree)) |> print()
 pull(xp, cols(tree)) |> parent_nodes() |> print()
 
 xp |>
-  group_by_tree_nodes(
-    .by = cols(tree),
-    col_node_level = cols(parent_nodes(tree))
+  group_by_nodes(
+    cols(parent_nodes(tree))
   ) |>
   summarize(Count = rowSums(Count)) |>
   pull(Count) |> 
@@ -247,13 +253,54 @@ xplse <- new_plyxp(da_lse) |>
   )
 print(xplse)
 da_xp <- xplse |>
-  group_by_tree_nodes(
-    .by = rows(tree),
-    only_inner = FALSE
+  group_by_nodes(
+    rows(all_nodes(tree))
   ) |>
-  summarise(counts = colSums(counts), rows(Signal = any(Signal))) |>
-  mutate(rows(.features = as.character(tree)))
+  summarise(counts = colSums(counts), rows(Signal = any(Signal))) 
 
 print(da_xp)
+
+```
+
+```{r}
+
+
+microbenchmark::microbenchmark(
+  treeClimbR = aggTSE(x = da_lse, rowLevel = all_node, rowFun = sum),
+  plyxp = group_by_nodes(
+    xplse, rows(all_nodes(tree))
+  ) |>
+  summarise(counts = colSums(counts)) 
+) |> print()
+
+
+bench::mark(
+  treeClimbR = aggTSE(x = da_lse, rowLevel = all_node, rowFun = sum),
+  plyxp = group_by_nodes(
+    xplse, rows(all_nodes(tree))
+  ) |>
+  summarise(counts = colSums(counts), rows(Signal = any(Signal))),
+  check = FALSE,
+  memory = FALSE
+) 
+
+```
+
+```{r}
+bench::mark(
+  treeClimbR = aggTSE(x = da_lse, rowLevel = all_node, rowFun = sum),
+  plyxp = {
+  xplse |>
+    group_by_tree_nodes(
+      xplse,
+      .by = rows(tree),
+      only_inner = FALSE
+    ) |>
+    summarise(counts = colSums(counts), rows(Signal = any(Signal))) 
+  },
+  check = FALSE,
+  memory = FALSE
+) |> print()
+
 
 ```

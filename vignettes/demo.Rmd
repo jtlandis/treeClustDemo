@@ -146,6 +146,8 @@ predict_dds <- function(object, new_data, coef, type = "apeglm") {
 -->
 
 ```{r}
+system.time({
+
 res <- dds |>
   new_plyxp() |>
   mutate(rows(
@@ -157,31 +159,40 @@ res <- dds |>
     rows(
       n_transcript = n(),
       cut_n_transcript = cut(n_transcript, c(2, 6, 10, Inf),
-        include.lowest = TRUE)
+        include.lowest = FALSE)
     )
   ) |>
   filter(rows(!is.na(cut_n_transcript))) |>
   mutate(
     rows(
       nodes = cluster_data(simple_exons, similarity_method = "basepair") |>
-        as_tree_vctr()
+        tree_vctr()
     )
   ) |>
   arrange(rows(nodes))
+}) |> print()
 
-print(res)
+# print(res)
 
 ```
 
 
 
 ```{r}
-inner_nodes <- summarize_by_inner(res,
-  across(everything(), colSums),
-  rows(n_children = n()),
-  .by = rows(nodes)
-)
+system.time({
 
+inner_nodes <- group_by_tree_nodes(res,
+  .by = rows(nodes)
+) |>
+summarise(
+  across(everything(), colSums), rows(n_children = n()),
+)
+}) |> print()
+
+```
+
+
+```{r}
 inner_nodes <- plyxp(
   res,
   predict_dds,
