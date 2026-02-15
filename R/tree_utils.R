@@ -125,6 +125,22 @@ tree_n_inner_node.phylo <- function(tree) {
 }
 
 
+tree_total_nodes <- function(tree) {
+  UseMethod("tree_total_nodes")
+}
+
+#' @noRd
+#' @exportS3Method
+tree_total_nodes.hclust <- function(tree) {
+  tree_n_inner_node.hclust(tree) + tree_leaf_max_node.hclust(tree)
+}
+
+#' @noRd
+#' @exportS3Method
+tree_total_nodes.phylo <- function(tree) {
+  tree_n_inner_node.phylo(tree) + tree_leaf_max_node.phylo(tree)
+}
+
 #' @export
 is_inner <- function(x) {
   with_tree_vctr(x, function(node, tree) {

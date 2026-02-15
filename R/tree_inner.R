@@ -133,28 +133,42 @@ node_level_ind <- function(
         }
       }
 
-      parent_fn <- function(tree) {
-        fn <- if (inherits(tree, "phylo")) {
-          node_parent.phylo
-        } else {
-          node_parent.hclust
-        }
-        function(node) {
-          fn(tree = tree, nodes = node)
-        }
-      }
-      parent_node_fn <- parent_fn(tree)
+      # parent_fn <- function(tree) {
+      #   fn <- if (inherits(tree, "phylo")) {
+      #     node_parent.phylo
+      #   } else {
+      #     node_parent.hclust
+      #   }
+      #   function(node) {
+      #     fn(tree = tree, nodes = node)
+      #   }
+      # }
+      # parent_node_fn <- parent_fn(tree)
       child_node_fn <- child_fn(tree)
+      # there is some issue with
+      # xp <- xp |> group_by_nodes(rows(parent_nodes(tree)))|> summarize(...)
+      # done repeatedly!!!
+      cache <- rlang::new_environment(
+        data = list(
+          desc = desc_cache,
+          loc = {
+            locs <- vctrs::vec_rep(NA_integer_, tree_total_nodes(tree))
+            locs[src_table$node_id] <- seq_along(src_table$node_id)
+            locs
+          }
+        )
+      )
       tbl <- tibble::tibble(node = node_id(target_level)) |>
         dplyr::rowwise() |>
         dplyr::mutate(
-          .rows = find_desc(
-            target = node, table = src_table, cache = desc_cache,
-            parent_node_fn = parent_node_fn, child_node_fn = child_node_fn
+          .rows = find_desc_cached(
+            target = node, cache = cache,
+            child_node_fn = child_node_fn
           ) |> list()
         ) |>
         dplyr::ungroup()
       tbl$node <- target_level
+      tbl$.rows <- lapply(tbl$.rows, vctrs::vec_slice, x = src_table$id)
       tbl
     },
     tree = trees,
@@ -164,12 +178,60 @@ node_level_ind <- function(
   dplyr::bind_rows(!!!out)
 }
 
+
+find_desc_cached <- function(
+  target,
+  cache,
+  child_node_fn
+) {
+  loc <- cache$loc[target]
+  if (all(!is.na(loc))) {
+    return(loc)
+  }
+  # if not, we see if target node may be built from desc
+  # by default desc will be leaf nodes, but for the purpose
+  # of the parent call, it is a temp variable
+  desc_nodes <- cache$desc[[target]]
+  loc <- cache$loc[desc_nodes]
+  if (all(cached <- !is.na(loc))) {
+    return(loc)
+  }
+
+  ok_loc <- loc[cached]
+
+  new_targets <- Filter(
+    \(x) !is.na(x),
+    unlist(child_node_fn(desc_nodes[!cached]))
+  )
+
+  # if it is empty, then we need to greedily
+  # look at immidiate desc
+  if (length(new_targets) == 0L) {
+    ok_loc <- integer()
+    new_targets <- Filter(
+      \(x) !is.na(x),
+      unlist(child_node_fn(target))
+    )
+  }
+
+  new_ind <- lapply(
+    new_targets,
+    find_desc_cached,
+    cache = cache,
+    child_node_fn = child_node_fn
+  )
+  ind <- vctrs::vec_c(!!!new_ind, ok_loc, .ptype = integer())
+
+  cache$desc[[target]] <- ind
+  ind
+}
+
 #' @param target a scalar integer from a tree_vctr target node
 #' @param table a tibble(node_id: node_id(tree_vctr), id: integer) object of source
 #' data nodes and indices
 #' @param cache a list for the associated tree where each element contains
 #' an integer vector of leaf nodes that construct that node
-find_desc <- function(target, table, cache, parent_node_fn, child_node_fn) {
+find_desc <- function(target, table, env, cache, parent_node_fn, child_node_fn) {
   # UseMethod("find_desc")
   target_nodes <- cache[[target]]
   # represents all leaf nodes
