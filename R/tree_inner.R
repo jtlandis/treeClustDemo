@@ -143,15 +143,19 @@ node_level_ind <- function(
           fn(tree = tree, nodes = node)
         }
       }
-      tibble::tibble(node = target_level, node_id = node_id(node)) |>
+      parent_node_fn <- parent_fn(tree)
+      child_node_fn <- child_fn(tree)
+      tbl <- tibble::tibble(node = node_id(target_level)) |>
         dplyr::rowwise() |>
         dplyr::mutate(
           .rows = find_desc(
-            target = node_id, table = src_table, cache = desc_cache,
-            parent_node_fn = parent_fn, child_node_fn = child_fn
+            target = node, table = src_table, cache = desc_cache,
+            parent_node_fn = parent_node_fn, child_node_fn = child_node_fn
           ) |> list()
         ) |>
         dplyr::ungroup()
+      tbl$node <- target_level
+      tbl
     },
     tree = trees,
     target_level = ind$val,
@@ -181,7 +185,6 @@ find_desc <- function(target, table, cache, parent_node_fn, child_node_fn) {
   if (all(found)) {
     return(table$id[which_tab])
   }
-
   while (TRUE) {
     # if not, construct nodes not found
     nodes <- nodes[!found]
@@ -199,19 +202,19 @@ find_desc <- function(target, table, cache, parent_node_fn, child_node_fn) {
 
     if (any(found)) {
       # for each found node, check its children and remove it from the table
-      children <- child_node_fn(nodes[found])
+      children <- Filter(\(x) !is.na(x), unlist(child_node_fn(nodes[found])))
       # very inefficent for loop... but I think it works?
       while (length(children) > 0) {
         child_tab <- !table$node_id %in% children
         which_tab <- which_tab & child_tab
         # new_tab <- which(vctrs::vec_in(table$node_id, children))
         # which_tab <- which_tab[!which_tab %in% new_tab]
-        children <- child_node_fn(children)
+        children <- Filter(\(x) !is.na(x), unlist(child_node_fn(children)))
       }
-      which_tab <- which_tab & (table$node_id %in% nodes)
+      which_tab <- which_tab | (table$node_id %in% nodes)
     }
     if (all(found)) {
-      return(vctrs::vec_slice(table$id, which_tab))
+      return(table$id[which_tab])
     }
   }
 }
