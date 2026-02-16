@@ -95,8 +95,13 @@ all_nodes <- function(tree_vec) {
 #' @param node_level Some subset of `tree_vec`
 node_level_ind <- function(
   tree_vec,
-  node_level
+  node_level,
+  missing_action = c("abort", "warn", "ignore", "drop")
 ) {
+  missing_action <- match.arg(
+    missing_action,
+    c("abort", "warn", "ignore", "drop")
+  )
   ptype <- vctrs::vec_ptype2(tree_vec, node_level)
   node_level <- vctrs::vec_cast(node_level, ptype)
   tree_vec <- vctrs::vec_cast(tree_vec, ptype)
@@ -145,6 +150,7 @@ node_level_ind <- function(
       # }
       # parent_node_fn <- parent_fn(tree)
       child_node_fn <- child_fn(tree)
+
       # there is some issue with
       # xp <- xp |> group_by_nodes(rows(parent_nodes(tree)))|> summarize(...)
       # done repeatedly!!!
@@ -163,7 +169,8 @@ node_level_ind <- function(
         dplyr::mutate(
           .rows = find_desc_cached(
             target = node, cache = cache,
-            child_node_fn = child_node_fn
+            child_node_fn = child_node_fn,
+            missing_action = missing_action
           ) |> list()
         ) |>
         dplyr::ungroup()
@@ -182,7 +189,8 @@ node_level_ind <- function(
 find_desc_cached <- function(
   target,
   cache,
-  child_node_fn
+  child_node_fn,
+  missing_action = c("abort", "warn", "ignore", "drop")
 ) {
   loc <- cache$loc[target]
   if (all(!is.na(loc))) {
@@ -193,7 +201,7 @@ find_desc_cached <- function(
   # of the parent call, it is a temp variable
   desc_nodes <- cache$desc[[target]]
   loc <- cache$loc[desc_nodes]
-  if (all(cached <- !is.na(loc))) {
+  if (all(cached <- !is.na(loc)) || length(desc_nodes) == 0L) {
     return(loc)
   }
 
@@ -218,8 +226,38 @@ find_desc_cached <- function(
     new_targets,
     find_desc_cached,
     cache = cache,
-    child_node_fn = child_node_fn
+    child_node_fn = child_node_fn,
+    missing_action = missing_action
   )
+
+  switch(missing_action,
+    ignore = {},
+    drop = {
+      for (i in seq_along(new_ind)) {
+        if (length(new_ind[[i]]) == 0) {
+          cache$desc[[target]] <- integer()
+          return(integer())
+        }
+      }
+    },
+    {
+      action <- switch(missing_action,
+        abort = rlang::abort,
+        warn = rlang::warn
+      )
+      for (i in seq_along(new_ind)) {
+        if (length(new_ind[[i]]) == 0) {
+          action(
+            message = sprintf(
+              "could not build node %i. Missing node %i", target,
+              new_targets[i]
+            )
+          )
+        }
+      }
+    }
+  )
+
   ind <- vctrs::vec_c(!!!new_ind, ok_loc, .ptype = integer())
 
   cache$desc[[target]] <- ind

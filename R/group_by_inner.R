@@ -26,20 +26,32 @@ group_by_tree_nodes.data.frame <- function(
 }
 
 #' @export
-group_by_nodes <- function(x, ...) {
+group_by_nodes <- function(
+  x, ...,
+  .missing_node = c("abort", "warn", "ignore", "drop")
+) {
+  .missing_node <- match.arg(
+    .missing_node, c("abort", "warn", "ignore", "drop")
+  )
   UseMethod("group_by_nodes")
 }
 
 #' @export
-group_by_nodes.data.frame <- function(x, ...) {
+group_by_nodes.data.frame <- function(
+  x, ...,
+  .missing_node = c("abort", "warn", "ignore", "drop")
+) {
   quos <- rlang::enquos(..., .named = TRUE)
   result <- lapply(quos, rlang::eval_tidy, data = x)
-  groups <- nodes_grouped(result, data = x)
+  groups <- nodes_grouped(result, data = x, .missing_node = .missing_node)
   dplyr::new_grouped_df(x, groups = groups)
 }
 
 #' @export
-group_by_nodes.PlySummarizedExperiment <- function(x, ...) {
+group_by_nodes.PlySummarizedExperiment <- function(
+  x, ...,
+  .missing_node = c("abort", "warn", "ignore", "drop")
+) {
   quos <- plyxp:::plyxp_quos(..., .ctx = c("assays", "rows", "cols"))
   mask <- plyxp:::new_plyxp_manager(plyxp::se(x))
   ctxs <- vapply(quos, attr, FUN.VALUE = "", which = "plyxp:::ctx")
@@ -49,10 +61,12 @@ group_by_nodes.PlySummarizedExperiment <- function(x, ...) {
   groups <- structure(
     list(
       row_groups = nodes_grouped_DF(
-        results$rows, SummarizedExperiment::rowData(x)
+        results$rows, SummarizedExperiment::rowData(x),
+        .missing_node = .missing_node
       ),
       col_groups = nodes_grouped_DF(
-        results$cols, SummarizedExperiment::colData(x)
+        results$cols, SummarizedExperiment::colData(x),
+        .missing_node = .missing_node
       )
     ),
     class = "plyxp_groups"
@@ -63,7 +77,10 @@ group_by_nodes.PlySummarizedExperiment <- function(x, ...) {
   x
 }
 
-nodes_grouped <- function(results, data) {
+nodes_grouped <- function(
+  results, data,
+  .missing_node = c("abort", "warn", "ignore", "drop")
+) {
   len <- length(results)
   if (is.null(results) || len == 0L) {
     return(NULL)
@@ -88,7 +105,8 @@ nodes_grouped <- function(results, data) {
   tree_data <- data[pos]
   tree_groups <- node_level_ind(
     tree_vec = tree_data[[1]],
-    node_level = result
+    node_level = result,
+    missing_action = .missing_node
   ) |>
     dplyr::rename(
       "{names(tree_data)}" := node,
@@ -109,8 +127,11 @@ nodes_grouped <- function(results, data) {
   tree_groups
 }
 
-nodes_grouped_DF <- function(result, data) {
-  x <- nodes_grouped(result, data)
+nodes_grouped_DF <- function(
+  result, data,
+  .missing_node = c("abort", "warn", "ignore", "drop")
+) {
+  x <- nodes_grouped(result, data, .missing_node = .missing_node)
   if (is.null(x)) {
     return(NULL)
   }
