@@ -179,6 +179,7 @@ da_lse <- readRDS(system.file("extdata", "da_sim_100_30_18de.rds",
 print(da_lse)
 ```
 
+<!-- below is taken from treeclimbR vignette (I think) -->
 
 ```{r}
 ## Generate tree visualization where true signal leaves are colored orange
