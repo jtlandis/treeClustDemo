@@ -9,19 +9,16 @@ author: Justin Landis
 
 ::: columns
 
-::: {.column width="70%"}
+::: {.column width="50%"}
 ![](./Overview-bindings.png)
 :::
 
-::: {.column width="10%"}
+::: {.column width="50%"}
+::: {.row}
+![](./plyxp_hexsticker2.png){width="100" fig-align="center"}
 :::
 
-::: {.column width="20%"}
-![](./plyxp_hexsticker2.png){width="100"}
-:::
-
-:::
-
+::: {.row}
 ```r
 xp |>
   group_by(
@@ -29,10 +26,17 @@ xp |>
   ) |>
   mutate(
     rows(
-      tree = cluster_transcripts(trans) |> ...
+      tree = cluster_transcripts(trans) |>
+        tree_vec(...)
     )
   )
 ```
+:::
+:::
+
+:::
+
+
 
 ```{r package setup, message=FALSE, warning=FALSE}
 library(TreeSummarizedExperiment)
@@ -45,8 +49,8 @@ library(ggtree)
 
 ```{r}
 set.seed(42)
-nfeat <- 1000L
-nsamp <- 10L
+nfeat <- 10000L
+nsamp <- 100L
 se <- SummarizedExperiment(
   assays = list(counts = matrix(rpois(nfeat * nsamp, 10), nfeat, nsamp)),
   rowData = DataFrame(
@@ -67,11 +71,13 @@ tse <- TreeSummarizedExperiment(
   rowNodeLab = sample(.rowtree$tip.label)
 )
 
-ggtree(.rowtree, size = 2, branch.length = "none") +
+ggtree(rtree(100), size = 2, branch.length = "none") +
     geom_text2(aes(label = node), color = "darkblue",
                hjust = -0.5, vjust = 0.7, size = 5.5) +
     geom_text2(aes(label = label), color = "darkorange",
-               hjust = -0.1, vjust = -0.7, size = 5.5)
+               hjust = -0.1, vjust = -0.7, size = 5.5) +
+    ggplot2::labs(title = "Example tree with 100 leafs")
+    
 ```
 
 ## The Goal
@@ -190,9 +196,10 @@ agg_tse |> assay() |> _[1:5, 1:5]
 #  group_by_nodes, which helps specify the node level to group at
 
 xp <- new_plyxp(se)
-xp |>
+all_nodes <- xp |>
   group_by_nodes(rows(all_nodes(tree))) |>
-  summarize(counts = colSums(counts)) |>
+  summarize(counts = colSums(counts)) 
+all_nodes |>
   pull(counts) |>
   _[1:5, 1:5]
 
@@ -214,19 +221,33 @@ microbenchmark::microbenchmark(
   plyxp = xp |>
     group_by_nodes(rows(all_nodes(tree))) |>
     summarize(counts = colSums(counts)),
-  times = 10L
+  times = 5L
 )
 ```
 
 
 ```{r}
 print(xp)
-xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree)), .missing_node = "drop") |>
   summarize(counts = colSums(counts))
 print(xp)
-xp <- xp |> group_by_nodes(rows(parent_nodes(tree))) |>
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree)), .missing_node = "drop") |>
   summarize(counts = colSums(counts))
 print(xp)
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree)), .missing_node = "drop") |>
+  summarize(counts = colSums(counts))
+print(xp)
+xp <- xp |> group_by_nodes(rows(parent_nodes(tree)), .missing_node = "drop") |>
+  summarize(counts = colSums(counts))
+print(xp)
+```
+
+```{r}
+all_nodes |>
+  ungroup() |>
+  slice(
+    rows(match(rowData(xp)$tree, tree, 0L))
+  )
 ```
 # end
 

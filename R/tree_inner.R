@@ -182,7 +182,11 @@ node_level_ind <- function(
     target_level = ind$val,
     src_table = src$val
   )
-  dplyr::bind_rows(!!!out)
+  out <- dplyr::bind_rows(!!!out)
+  if (missing_action == "drop") {
+    out <- dplyr::filter(out, lengths(.rows) > 0)
+  }
+  out
 }
 
 
