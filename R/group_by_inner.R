@@ -109,8 +109,7 @@ nodes_grouped <- function(
     missing_action = .missing_node
   ) |>
     dplyr::rename(
-      "{names(tree_data)}" := node,
-      .indices = .rows
+      "{names(tree_data)}" := node
     )
   if (len > 1) {
     # process the rest of the group data

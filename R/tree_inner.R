@@ -164,29 +164,31 @@ node_level_ind <- function(
           }
         )
       )
-      tbl <- tibble::tibble(node = node_id(target_level)) |>
-        dplyr::rowwise() |>
-        dplyr::mutate(
-          .rows = find_desc_cached(
-            target = node, cache = cache,
-            child_node_fn = child_node_fn,
-            missing_action = missing_action
-          ) |> list()
-        ) |>
-        dplyr::ungroup()
-      tbl$node <- target_level
-      tbl$.rows <- lapply(tbl$.rows, vctrs::vec_slice, x = src_table$id)
-      tbl
+      .rows <- vector("list", length = length(target_level))
+      nodes <- node_id(target_level)
+      for (i in seq_along(nodes)) {
+        .rows[[i]] <- find_desc_cached(
+          target = nodes[i], cache = cache,
+          child_node_fn = child_node_fn,
+          missing_action = missing_action
+        )
+      }
+      lapply(.rows, vctrs::vec_slice, x = src_table$id)
     },
     tree = trees,
     target_level = ind$val,
     src_table = src$val
   )
-  out <- dplyr::bind_rows(!!!out)
+  indices <- vctrs::vec_c(!!!out)
+  target_levels <- vctrs::vec_unchop(ind$val, ptype = ptype)
+  tbl <- tibble::tibble(
+    node = target_levels,
+    .indices = indices
+  )
   if (missing_action == "drop") {
-    out <- dplyr::filter(out, lengths(.rows) > 0)
+    tbl <- dplyr::filter(tbl, lengths(.indices) > 0)
   }
-  out
+  tbl
 }
 
 
