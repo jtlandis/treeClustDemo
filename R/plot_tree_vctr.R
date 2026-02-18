@@ -1,3 +1,8 @@
+#######################
+#  Old code, needs refactor
+#######################
+
+
 #' @export
 tree_plot_data <- function(x, ...) {
   data <- with_tree_vctr(

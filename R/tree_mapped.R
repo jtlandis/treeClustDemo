@@ -1,3 +1,7 @@
+#######################
+#  Old code, needs refactor
+#######################
+
 tree_mapped <- function(tree) {
   new_tree_mapped(
     vctrs::vec_cast(tree, double()),

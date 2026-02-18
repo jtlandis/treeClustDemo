@@ -1,3 +1,7 @@
+#######################
+#  Old code, needs refactor
+#######################
+
 ScaleDiscreteTree <- ggplot2::ggproto(
   "ScaleDiscreteTree",
   ggplot2::ScaleDiscretePosition,
