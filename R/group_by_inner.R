@@ -52,8 +52,12 @@ group_by_nodes.PlySummarizedExperiment <- function(
   x, ...,
   .missing_node = c("abort", "warn", "ignore", "drop")
 ) {
+  se_obj <- plyxp::se(x)
+  # we arent supporting standard group generics... I think?
+  .old_groups <- plyxp:::group_data_se_impl(se_obj)
+  plyxp:::group_data_se_impl(se_obj) <- NULL
   quos <- plyxp:::plyxp_quos(..., .ctx = c("assays", "rows", "cols"))
-  mask <- plyxp:::new_plyxp_manager(plyxp::se(x))
+  mask <- plyxp:::new_plyxp_manager(se_obj)
   ctxs <- vapply(quos, attr, FUN.VALUE = "", which = "plyxp:::ctx")
   nms <- names(quos)
   mask <- plyxp:::plyxp_evaluate(mask, quos, ctxs, nms, rlang::caller_env())
@@ -71,7 +75,6 @@ group_by_nodes.PlySummarizedExperiment <- function(
     ),
     class = "plyxp_groups"
   )
-  se_obj <- plyxp::se(x)
   plyxp:::group_data_se_impl(se_obj) <- groups
   plyxp::se(x) <- se_obj
   x

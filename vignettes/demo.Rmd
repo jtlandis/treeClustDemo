@@ -181,28 +181,27 @@ res <- dds |>
 ```{r}
 system.time({
 
-inner_nodes <- group_by_tree_nodes(res,
-  .by = rows(nodes)
+xp_inner <- group_by_nodes(res,
+  rows(inner_nodes(nodes))
 ) |>
 summarise(
   across(everything(), colSums), rows(n_children = n()),
 )
 }) |> print()
-
 ```
 
 
 ```{r}
-inner_nodes <- plyxp(
+res_inner <- plyxp(
   res,
   predict_dds,
-  new_data = DESeq2::DESeqDataSet(se(inner_nodes),
+  new_data = DESeq2::DESeqDataSet(se(xp_inner),
     design = design(se(res))
   ),
   coef = "condition_WT_vs_KD",
   type = "apeglm"
 )
-print(inner_nodes)
+print(res_inner)
 ```
 
 
