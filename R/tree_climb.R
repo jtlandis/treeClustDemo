@@ -1,7 +1,8 @@
 #' @export
 climb <- function(.data, method = c("strict", "ordered_pval"), ...) {
   method <- match.arg(method, c("strict", "ordered_pval"))
-  f <- switch(method,
+  f <- switch(
+    method,
     strict = climb_strict,
     ordered_pval = climb_pvalue_arrange
   )
@@ -13,8 +14,8 @@ climb <- function(.data, method = c("strict", "ordered_pval"), ...) {
 #' climb an expanded results data with a tree. This function seems to require
 #' that the data is ordered by the hclust node order.
 #' @returns logical vector of which nodes to keep
-climb_strict <- function(tree_vec, pvals, ...) {
-  .clust <- tree(tree_vec) # should error if not length 1
+climb_strict <- function(tree_vec, pvals, which = NULL, ...) {
+  .clust <- tree(tree_vec, which = which) # should error if not length 1
   stopifnot(
     "`tree_vec` and `pvals` should be same size" = length(tree_vec) ==
       length(pvals)

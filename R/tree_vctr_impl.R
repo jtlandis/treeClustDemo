@@ -32,14 +32,17 @@ trees <- function(x) {
 }
 
 #' @export
-tree <- function(x) {
+tree <- function(x, which = NULL) {
   trees <- trees(x)
-  if (length(trees) != 1L) {
-    stop("`tree` expects there to be only one tree object on `tree_vctr`")
+  if (is.null(which)) {
+    if (length(trees) != 1L) {
+      stop("`tree` expects there to be only one tree object on `tree_vctr`")
+    }
+    return(trees[[1L]])
   }
-  trees[[1L]]
+  which <- as.integer(which)
+  trees[[which]]
 }
-
 
 
 node_descendants <- function(tree) {
@@ -52,7 +55,8 @@ node_descendants <- function(tree) {
 #' to the node_id() funciton.
 #' @export
 descendants <- function(x) {
-  switch(node_encoding(x),
+  switch(
+    node_encoding(x),
     observation = with_tree_vctr(
       x,
       function(node, tree) {
@@ -65,7 +69,8 @@ descendants <- function(x) {
         desc <- node_descendants(tree)
         inner_seq <- node_inner(tree)
         desc[inner_seq] <- lapply(
-          desc[inner_seq], match,
+          desc[inner_seq],
+          match,
           table = tree$order
         )
         desc[node]

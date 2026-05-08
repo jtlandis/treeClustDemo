@@ -76,10 +76,12 @@ with_tree_vctr <- function(vec, .f, ...) {
   if (length(trees) == 1L) {
     .f(node = nodes, tree = trees[[1L]], ...)
   } else {
-    tree_ind <- vctrs::vec_group_loc(tree_id(vec))$loc
-    out <- vector("list", length(trees))
-    for (i in seq_along(trees)) {
-      tree <- trees[[i]]
+    grp <- vctrs::vec_group_loc(tree_id(vec))
+    tree_ind <- grp$loc
+    out <- vector("list", length(tree_ind))
+    for (i in seq_along(tree_ind)) {
+      tree_ <- grp$key[i]
+      tree <- trees[[tree_]]
       ind <- tree_ind[[i]]
       out[[i]] <- .f(node = nodes[ind], tree = tree, ...)
     }
@@ -101,7 +103,9 @@ obj_print_footer.tree_vctr <- function(x, ...) {
   n_trees <- length(trees(x))
   cat(
     sep = "",
-    "# n tree(s): ", n_trees, "\n"
+    "# n tree(s): ",
+    n_trees,
+    "\n"
   )
 }
 
@@ -175,11 +179,9 @@ vec_ptype2.tree_vctr.tree_vctr <- function(x, y, ...) {
   ykeep <- which(!vctrs::vec_in(ywt, xwt))
   xtree <- attr(x, "tree")
   if (length(ykeep)) {
-    xwt <- vctrs::vec_c(xwt,
-      vctrs::vec_slice(ywt, ykeep),
-      .ptype = character()
-    )
-    xtree <- vctrs::vec_c(xtree,
+    xwt <- vctrs::vec_c(xwt, vctrs::vec_slice(ywt, ykeep), .ptype = character())
+    xtree <- vctrs::vec_c(
+      xtree,
       vctrs::vec_slice(attr(y, "tree"), ykeep),
       .ptype = list()
     )

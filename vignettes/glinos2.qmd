@@ -1,0 +1,241 @@
+May require reinstall of treeClustDemo. I found bugs 2026-05-08
+
+```{r}
+library(treeClustDemo)
+library(plyxp)
+
+se <- readRDS("GTEx_v9_ONT_SummarizedExperiment.rds")
+
+
+## Attach exons
+txdb_f <- "gencode_v48_txdb.sqlite"
+if (!file.exists(txdb_f)) {
+  txdb <- txdbmaker::makeTxDbFromGFF("gencode.v48.annotation.gtf.gz")
+  AnnotationDbi::saveDb(txdb, file = txdb_f)
+} else {
+  txdb <- AnnotationDbi::loadDb(txdb_f)
+}
+
+exons <- GenomicFeatures::exonsBy(txdb, by = "tx")
+txps <- AnnotationDbi::select(
+  txdb,
+  AnnotationDbi::keys(txdb, "TXID"),
+  c("TXNAME", "GENEID"),
+  "TXID"
+) |>
+  tibble::as_tibble() |>
+  dplyr::mutate(TXID = as.character(TXID))
+
+stopifnot(
+  "txps txid does not match" = match(txps$TXID, names(exons)) |>
+    identical(seq_len(length(exons)))
+)
+
+names(exons) <- dplyr::case_when(
+  stringr::str_detect(txps$TXNAME, "ENST") ~ txps$TXNAME,
+  TRUE ~ paste0(txps$GENEID, "-", stringr::str_sub(txps$TXNAME, 1, 8))
+)
+
+slice_indx <- match(rownames(se), txps$TXNAME, nomatch = 0L)
+txps <- txps[slice_indx, ]
+# txps <- txdb$txps |>
+# filter(tx_nms)
+
+se <- se[txps$TXNAME, ]
+stopifnot(all.equal(rownames(se), txps$TXNAME))
+exons <- exons[slice_indx]
+rownames(se) <- names(exons)
+rowData(se)$exons <- exons
+
+xp <- new_plyxp(se)
+xp <- xp |>
+  filter(
+    rows(rowSums(.assays_asis$counts >= 10) >= 6)
+  ) |>
+  mutate(
+    rows(
+      gene_id = unlist(gene_id),
+      gene = stringr::str_replace(gene_id, "\\.\\d+", ""),
+      symbol = AnnotationDbi::mapIds(
+        org.Hs.eg.db::org.Hs.eg.db,
+        gene,
+        "SYMBOL",
+        "ENSEMBL"
+      ),
+      symbol = dplyr::case_when(
+        is.na(symbol) ~ gene,
+        TRUE ~ symbol
+      )
+    ),
+    cols(
+      condition = dplyr::case_when(
+        condition == "ctrl" ~ "WT",
+        condition == "exp" ~ "KD"
+      )
+    )
+  )
+head(table(table(rowData(xp)$gene_id)))
+
+
+xp <- xp |>
+  group_by(rows(gene_id)) |>
+  filter(rows(n() > 1)) |>
+  ungroup() |>
+  arrange(rows(gene_id))
+
+head(table(table(rowData(xp)$gene_id)))
+
+
+library(DESeq2)
+dds <- xp |>
+  mutate(
+    counts = round(counts) |> as.integer(),
+    train = rbinom(n(), counts, prob = 0.5),
+    test = as.integer(counts - train)
+  ) |>
+  plyxp(
+    DESeqDataSet,
+    design = ~condition
+  )
+
+assay(dds, "avgTxLength") <- NULL
+
+# estimate sizeFactors on original counts
+dds <- plyxp(dds, estimateSizeFactors) |>
+  # before computing DESeq, make "counts"
+  # into training data
+  mutate(
+    old_counts = counts,
+    counts = train
+  ) |>
+  # run DESeq2 where counts == train
+  plyxp(DESeq)
+
+
+select_common_rows <- function(se, common_rows) {
+  new_plyxp(se) |>
+    dplyr::select(
+      rows(all_of(common_names)),
+      everything(),
+      cols(everything())
+    ) |>
+    ungroup() |>
+    se()
+}
+
+des_res2rows <- function(se, coef, ...) {
+  res <- DESeq2::lfcShrink(se, coef = coef, ...)
+  rowData(se)[names(res)] <- res
+  se
+}
+fmt_log <- function(nums, digits = 0) {
+  template <- paste0("%s%.", digits, "f")
+  sign <- rep("-", length(nums))
+  sign[nums > 0] <- "+"
+  sprintf(template, sign, abs(nums))
+}
+
+#' @param object a dds object that had been predicted
+#' @param new_data a different dds object that will take the priors of `objec`
+#' @param coef string indicating the coef design to use for shrinkage
+#' @param type glm type.
+#' @export
+predict_dds <- function(object, new_data, coef, type = "apeglm") {
+  if (!is.null(sf <- sizeFactors(object))) {
+    sizeFactors(new_data) <- sizeFactors(object)
+  }
+  new_data <- estimateDispersionsGeneEst(new_data)
+  dispersionFunction(new_data) <- dispersionFunction(object)
+  new_data <- estimateDispersionsMAP(new_data) |>
+    nbinomWaldTest()
+
+  res <- lfcShrink(object, coef = coef, type = type)
+  pc <- attr(res, "priorInfo")$prior.control
+  res <- lfcShrink(
+    new_data,
+    coef = coef,
+    type = type,
+    apeAdapt = FALSE,
+    prior.control = pc
+  )
+  metadata(new_data)$shrink_results <- res
+  new_data
+}
+
+
+system.time({
+  res <- dds |>
+    new_plyxp() |>
+    mutate(rows(
+      simple_exons = simple_range(exons),
+      n_children = 1L
+    )) |>
+    group_by(rows(gene_id)) |>
+    mutate(
+      rows(
+        n_transcript = n(),
+        cut_n_transcript = cut(
+          n_transcript,
+          c(2, 6, 10, Inf),
+          include.lowest = FALSE
+        )
+      )
+    ) |>
+    filter(rows(!is.na(cut_n_transcript))) |>
+    mutate(
+      rows(
+        nodes = cluster_data(simple_exons, similarity_method = "basepair") |>
+          tree_vctr()
+      )
+    ) |>
+    arrange(rows(nodes))
+}) |>
+  print()
+
+system.time({
+  xp_inner <- group_by_nodes(res, rows(inner_nodes(nodes))) |>
+    summarise(
+      across(everything(), colSums),
+      rows(n_children = n()),
+    )
+}) |>
+  print()
+
+res_inner <- plyxp(
+  res,
+  predict_dds,
+  new_data = DESeq2::DESeqDataSet(se(xp_inner), design = design(se(res))),
+  coef = "condition_WT_vs_KD",
+  type = "apeglm"
+)
+print(res_inner)
+
+
+common_names <- intersect(
+  rowData(res_inner) |> names(),
+  rowData(res) |> names()
+)
+
+# rowRanges(se(res_inner)) <- NULL
+.res <- res
+rowRanges(se(res)) <- as(rowRanges(se(res)), "CompressedGRangesList")
+.se <- rbind(
+  select_common_rows(res, common_names),
+  select_common_rows(res_inner, common_names)
+) |>
+  new_plyxp() |>
+  ungroup() |>
+  mutate(
+    rows(.features = as.character(nodes))
+  ) |>
+  plyxp(des_res2rows, coef = "condition_WT_vs_KD")
+
+
+.se |>
+  group_by(rows(gene_tree = tree_id(nodes))) |>
+  mutate(rows(
+    keep = climb(nodes, pvals = pvalue, which = unique(gene_tree))
+  )) |>
+  filter(rows(keep, is_inner(nodes))) |>
+  pull(rows(n_children))
+```
