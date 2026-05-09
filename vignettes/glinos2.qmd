@@ -231,11 +231,34 @@ rowRanges(se(res)) <- as(rowRanges(se(res)), "CompressedGRangesList")
   plyxp(des_res2rows, coef = "condition_WT_vs_KD")
 
 
-.se |>
+
+
+```
+
+```{r}
+
+test <- .se |>
   group_by(rows(gene_tree = tree_id(nodes))) |>
   mutate(rows(
     keep = climb(nodes, pvals = pvalue, which = unique(gene_tree))
   )) |>
-  filter(rows(keep, is_inner(nodes))) |>
-  pull(rows(n_children))
+  filter(rows(keep)) |>
+  mutate(
+    counts = as.integer(test),
+    rows(
+      train_res = tibble::tibble(
+        baseMean, baseVar, log2FoldChange,
+        lfcSE, pvalue, padj, condition_WT_vs_KD,
+        SE_Intercept, SE_condition_WT_vs_KD )
+    )
+  ) |>
+  dplyr::select(
+    counts, old_counts,
+    rows(nodes, n_children, train_res),
+    cols(everything())
+  )
+
+dds_test <- plyxp(test, DESeq) |>
+  plyxp(des_res2rows, coef = "condition_WT_vs_KD")
+
 ```
