@@ -240,7 +240,58 @@ common_names <- intersect(
 
 # rowRanges(se(res_inner)) <- NULL
 .res <- res
-rowRanges(se(res)) <- as(rowRanges(se(res)), "CompressedGRangesList")
+rr <- rowRanges(se(res))
+rowRanges(se(res)) <- as(rr, "CompressedGRangesList")
+# for completeness, and so we can track the source
+# of each merge if we are curious later
+
+mcols(rr) <- NULL
+
+inner_desc <- res_inner |> {
+  \(se) {
+    nodes <- pull(se, rows(nodes))
+    # returns all node ids needed to construct
+    desc_nodes <- descendants(nodes)
+    mapply(
+      \(node, wt, trees) {
+        treeClustDemo:::new_pure_tree_vctr(
+          node = node,
+          which_tree = vec_rep(wt, length(node)),
+          tree = trees
+        )
+      },
+      node = desc_nodes,
+      wt = vctrs::field(nodes, "which_tree"),
+      MoreArgs = list(trees = trees(nodes)),
+      SIMPLIFY = FALSE
+    )
+  }
+}()
+
+# much faster than doing an lapply
+rowRanges(se(res_inner)) <- inner_desc |> {
+  \(inner, leaf, rr) {
+    lens <- lengths(inner)
+    ends <- cumsum(lens)
+    unlistData <- vctrs::list_unchop(inner)
+    # match inner node desc against observation leaf nodes
+    ind <- match(unlistData, leaf)
+    # use indices to slice original rowRanges
+    rr <- rr[ind]
+    # construct CompressedGRangesList
+    new(
+      "CompressedGRangesList",
+      unlistData = rr,
+      elementMetadata = rowData(res_inner),
+      partitioning = IRanges::PartitioningByEnd(x = ends)
+    )
+  }
+}(leaf = rowData(res)$nodes, rr = rr)
+
+```
+
+```{r}
+
 .se <- rbind(
   select_common_rows(res, common_names),
   select_common_rows(res_inner, common_names)
@@ -302,6 +353,9 @@ ord <- climb_se |>
     rows(nodes, n_children, train_res),
     cols(everything())
   )
+```
+
+```{r}
 
 dds_strict <- plyxp(strict, DESeq) |>
   plyxp(des_res2rows, coef = "condition_WT_vs_KD")
@@ -323,7 +377,7 @@ climb_se |>
 # p values selected based on merge
 plot_data <- dds_strict |>
   rowData() |>
-  tibble::as_tibble() |>
+  tibble::as_tibble()
 
 plot_data |>
   ggplot(aes(train_res.pvalue, fill = n_children > 1)) +
