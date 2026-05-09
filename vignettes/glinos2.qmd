@@ -307,3 +307,33 @@ dds_strict <- plyxp(strict, DESeq) |>
   plyxp(des_res2rows, coef = "condition_WT_vs_KD")
 
 ```
+
+```{r}
+library(ggplot2)
+
+# p values based on unmerged training data
+climb_se |>
+  filter(rows(is_leaf(nodes))) |>
+  rowData() |>
+  tibble::as_tibble() |>
+  ggplot(aes(pvalue, fill = n_children > 1)) +
+  geom_histogram() +
+  labs(title = "Training set, Leaf Nodes")
+
+# p values selected based on merge
+dds_strict |>
+  rowData() |>
+  tibble::as_tibble() |>
+  ggplot(aes(train_res.pvalue, fill = n_children > 1)) +
+  geom_histogram() +
+  labs(title = "Training set, Merged")
+
+dds_strict |>
+  rowData() |>
+  tibble::as_tibble() |>
+  ggplot(aes(pvalue, fill = n_children > 1)) +
+  geom_histogram() +
+  labs(title = "Test set, Merged")
+
+
+```
