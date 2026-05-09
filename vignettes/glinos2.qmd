@@ -321,16 +321,16 @@ climb_se |>
   labs(title = "Training set, Leaf Nodes")
 
 # p values selected based on merge
-dds_strict |>
+plot_data <- dds_strict |>
   rowData() |>
   tibble::as_tibble() |>
+
+plot_data |>
   ggplot(aes(train_res.pvalue, fill = n_children > 1)) +
   geom_histogram() +
   labs(title = "Training set, Merged")
 
-dds_strict |>
-  rowData() |>
-  tibble::as_tibble() |>
+plot_data |>
   ggplot(aes(pvalue, fill = n_children > 1)) +
   geom_histogram() +
   labs(title = "Test set, Merged")
