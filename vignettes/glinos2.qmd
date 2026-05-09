@@ -391,3 +391,45 @@ plot_data |>
 
 
 ```
+
+Curious if `padj` has a more uniform distribution:
+
+```{r}
+climb_se |>
+  filter(rows(is_leaf(nodes))) |>
+  rowData() |>
+  tibble::as_tibble() |>
+  ggplot(aes(padj, fill = n_children > 1)) +
+  geom_histogram() +
+  labs(title = "Training set, Leaf Nodes - pval adjusted")
+
+plot_data |>
+  ggplot(aes(padj, fill = n_children > 1)) +
+  geom_histogram() +
+  labs(title = "Test set, Merged - pval adjusted")
+```
+
+```{r}
+plot_data |>
+  ggplot(aes(-log10(train_res.pvalue), -log10(pvalue))) +
+  geom_point() +
+  geom_abline(slope = 1, color = "red") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted") +
+  geom_vline(xintercept = -log10(0.05), linetype = "dotted") +
+  coord_fixed(ratio = 1, xlim = c(0, 90), ylim = c(0, 90))
+```
+
+```{r}
+
+.sig <- dds_strict |>
+  #arbitrary contrary
+  filter(rows(pvalue < 0.00001))
+.sig
+.sig |>
+  arrange(rows(pvalue, dplyr::desc(n_children))) |>
+  dplyr::select(
+    counts,
+    rows(pvalue)
+  )
+
+```
