@@ -55,26 +55,8 @@ node_descendants <- function(tree) {
 #' to the node_id() funciton.
 #' @export
 descendants <- function(x) {
-  switch(
-    node_encoding(x),
-    observation = with_tree_vctr(
-      x,
-      function(node, tree) {
-        node_descendants(tree)[node]
-      }
-    ),
-    order = with_tree_vctr(
-      x,
-      function(node, tree) {
-        desc <- node_descendants(tree)
-        inner_seq <- node_inner(tree)
-        desc[inner_seq] <- lapply(
-          desc[inner_seq],
-          match,
-          table = tree$order
-        )
-        desc[node]
-      }
-    )
+  with_tree_vctr(
+    x,
+    \(node, tree) node_descendants(tree)[node]
   )
 }
