@@ -11,15 +11,16 @@ climb <- function(.data, method = c("strict", "ordered_pval"), ...) {
 }
 
 #' @description
-#' climb an expanded results data with a tree. This function seems to require
-#' that the data is ordered by the hclust node order.
+#' climb an expanded results data with a tree.
 #' @returns logical vector of which nodes to keep
 climb_strict <- function(tree_vec, pvals, which = NULL, ...) {
   .clust <- tree(tree_vec, which = which) # should error if not length 1
   stopifnot(
     "`tree_vec` and `pvals` should be same size" = length(tree_vec) ==
-      length(pvals)
+      length(pvals),
+    "expected an hclust `tree_vec`" = inherits(.clust, "hclust")
   )
+  ord <- order(node_id(tree_vec))
   m <- .clust$merge
   o <- .clust$order
   n <- nrow(m) + 1
@@ -30,6 +31,8 @@ climb_strict <- function(tree_vec, pvals, which = NULL, ...) {
   keep <- rep(NA, length(pvals))
   is_na <- is.na(pvals)
   pvals[is_na] <- 1
+  pvals <- pvals[ord]
+
   for (i in seq_len(nrow(m))) {
     nodes <- m[i, ]
 
@@ -58,13 +61,13 @@ climb_strict <- function(tree_vec, pvals, which = NULL, ...) {
   }
 
   # .data$pvalue[is_na] <- NA_real_
-  keep
+  keep[order(ord)]
 }
 
 #' @param .data a result object
 #' @param ... unused
 climb_pvalue_arrange <- function(tree_vec, pvals, ..., merge_alpha = 1) {
-  n_leafs <- length(tree(tree_vec)$order)
+  n_leafs <- tree_leaf_max_node(tree(tree_vec))
 
   # leafs <- filter(res, n_children==1) |>
   #   tidyr::unnest(descendants)
