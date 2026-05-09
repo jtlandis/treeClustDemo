@@ -1,3 +1,8 @@
+---
+title: "Glinos 2: Reanalysis"
+date: last-mo dified
+---
+
 May require reinstall of treeClustDemo. I found bugs 2026-05-08
 
 ```{r}
@@ -5,7 +10,9 @@ library(treeClustDemo)
 library(plyxp)
 
 se <- readRDS("GTEx_v9_ONT_SummarizedExperiment.rds")
+```
 
+```{r}
 
 ## Attach exons
 txdb_f <- "gencode_v48_txdb.sqlite"
@@ -46,7 +53,9 @@ stopifnot(all.equal(rownames(se), txps$TXNAME))
 exons <- exons[slice_indx]
 rownames(se) <- names(exons)
 rowData(se)$exons <- exons
+```
 
+```{r}
 xp <- new_plyxp(se)
 xp <- xp |>
   filter(
@@ -75,8 +84,9 @@ xp <- xp |>
     )
   )
 head(table(table(rowData(xp)$gene_id)))
+```
 
-
+```{r}
 xp <- xp |>
   group_by(rows(gene_id)) |>
   filter(rows(n() > 1)) |>
@@ -84,8 +94,9 @@ xp <- xp |>
   arrange(rows(gene_id))
 
 head(table(table(rowData(xp)$gene_id)))
+```
 
-
+```{r}
 library(DESeq2)
 
 set.seed(314)
@@ -113,7 +124,10 @@ dds <- plyxp(dds, estimateSizeFactors) |>
   # run DESeq2 where counts == train
   plyxp(DESeq)
 
+```
 
+```{r}
+# extra functions
 select_common_rows <- function(se, common_rows) {
   new_plyxp(se) |>
     dplyr::select(
@@ -164,6 +178,9 @@ predict_dds <- function(object, new_data, coef, type = "apeglm") {
   new_data
 }
 
+```
+
+```{r}
 
 system.time({
   res <- dds |>
@@ -212,6 +229,9 @@ res_inner <- plyxp(
 )
 print(res_inner)
 
+```
+
+```{r}
 
 common_names <- intersect(
   rowData(res_inner) |> names(),
@@ -232,19 +252,20 @@ rowRanges(se(res)) <- as(rowRanges(se(res)), "CompressedGRangesList")
   ) |>
   plyxp(des_res2rows, coef = "condition_WT_vs_KD")
 
-
-
-
 ```
 
 ```{r}
-
-test <- .se |>
+climb_se <- .se |>
   group_by(rows(gene_tree = tree_id(nodes))) |>
   mutate(rows(
-    keep = climb(nodes, pvals = pvalue, which = unique(gene_tree))
-  )) |>
-  filter(rows(keep)) |>
+    keep_strict = climb(nodes, pvals = pvalue, which = gene_tree[1]),
+    keep_ord = climb(nodes, pvals = pvalue, which = gene_tree[1], method = "ord")
+  ))
+```
+
+```{r}
+strict <- climb_se |>
+  filter(rows(keep_strict)) |>
   mutate(
     counts = as.integer(test),
     rows(
@@ -260,7 +281,29 @@ test <- .se |>
     cols(everything())
   )
 
-dds_test <- plyxp(test, DESeq) |>
+strict
+```
+
+```{r}
+
+ord <- climb_se |>
+  filter(rows(keep_ord)) |>
+  mutate(
+    counts = as.integer(test),
+    rows(
+      train_res = tibble::tibble(
+        baseMean, baseVar, log2FoldChange,
+        lfcSE, pvalue, padj, condition_WT_vs_KD,
+        SE_Intercept, SE_condition_WT_vs_KD )
+    )
+  ) |>
+  dplyr::select(
+    counts, old_counts,
+    rows(nodes, n_children, train_res),
+    cols(everything())
+  )
+
+dds_strict <- plyxp(strict, DESeq) |>
   plyxp(des_res2rows, coef = "condition_WT_vs_KD")
 
 ```
