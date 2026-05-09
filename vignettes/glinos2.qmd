@@ -87,6 +87,8 @@ head(table(table(rowData(xp)$gene_id)))
 
 
 library(DESeq2)
+
+set.seed(314)
 dds <- xp |>
   mutate(
     counts = round(counts) |> as.integer(),
