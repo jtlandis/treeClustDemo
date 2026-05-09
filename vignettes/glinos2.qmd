@@ -1,11 +1,12 @@
 ---
 title: "Glinos 2: Reanalysis"
-date: last-mo dified
+date: last-modified
 ---
 
 May require reinstall of treeClustDemo. I found bugs 2026-05-08
 
 ```{r}
+#| message: false
 library(treeClustDemo)
 library(plyxp)
 
@@ -13,6 +14,7 @@ se <- readRDS("GTEx_v9_ONT_SummarizedExperiment.rds")
 ```
 
 ```{r}
+#| message: false
 
 ## Attach exons
 txdb_f <- "gencode_v48_txdb.sqlite"
@@ -97,6 +99,7 @@ head(table(table(rowData(xp)$gene_id)))
 ```
 
 ```{r}
+#| message: false
 library(DESeq2)
 
 set.seed(314)
@@ -210,6 +213,7 @@ system.time({
     arrange(rows(nodes))
 }) |>
   print()
+res
 
 system.time({
   xp_inner <- group_by_nodes(res, rows(inner_nodes(nodes))) |>
@@ -425,11 +429,14 @@ plot_data |>
   #arbitrary contrary
   filter(rows(pvalue < 0.00001))
 .sig
-.sig |>
+.sig_arranged <- .sig |>
   arrange(rows(pvalue, dplyr::desc(n_children))) |>
   dplyr::select(
     counts,
     rows(pvalue)
   )
+.sig_arranged
+
+rowRanges(se(.sig_arranged))
 
 ```
