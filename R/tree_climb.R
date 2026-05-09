@@ -66,8 +66,14 @@ climb_strict <- function(tree_vec, pvals, which = NULL, ...) {
 
 #' @param .data a result object
 #' @param ... unused
-climb_pvalue_arrange <- function(tree_vec, pvals, ..., merge_alpha = 1) {
-  n_leafs <- tree_leaf_max_node(tree(tree_vec))
+climb_pvalue_arrange <- function(
+  tree_vec,
+  pvals,
+  which = NULL,
+  ...,
+  merge_alpha = 1
+) {
+  n_leafs <- tree_leaf_max_node(tree(tree_vec, which = which))
 
   # leafs <- filter(res, n_children==1) |>
   #   tidyr::unnest(descendants)
