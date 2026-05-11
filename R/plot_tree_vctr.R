@@ -2,27 +2,31 @@
 #  Old code, needs refactor
 #######################
 
-
 #' @export
 tree_plot_data <- function(x, ...) {
   data <- with_tree_vctr(
-    encode_obsv(x),
+    x,
     function(nodes, tree) {
+      stopifnot(
+        "expected hclust tree" = inherits(tree, "hclust")
+      )
       merge <- tree$merge
       n <- length(tree$order)
       is_leaf <- merge < 0
-      merge[is_leaf] <- -merge[is_leaf]
+      merge[is_leaf] <- match(-merge[is_leaf], tree$order)
       merge[!is_leaf] <- merge[!is_leaf] + n
       N <- n + n - 1L
       x_pos <- double(N)
-      x_last <- matrix(NA_real_,
-        nrow = N, ncol = 2,
+      x_last <- matrix(
+        NA_real_,
+        nrow = N,
+        ncol = 2,
         dimnames = list(NULL, c("min", "max"))
       )
       y_pos <- double(N)
       y_next <- rep(NA_real_, N)
       y_pos[(n + 1):N] <- tree$height
-      x_pos[seq_len(n)] <- order(tree$order)
+      x_pos[seq_len(n)] <- seq_len(n)
       for (i in seq_len(nrow(merge))) {
         node <- n + i
         is <- merge[i, ]
@@ -63,8 +67,10 @@ plot_tree_vctr_data <- function(data, ...) {
 #' @export
 autoplot.tree_vctr <- function(object, ..., .other_data = list()) {
   plot_tree_vctr_data(
-    tree_plot_data(object, !!!.other_data), ...
-  ) + ggplot2::facet_wrap(~ tree_id(nodes), scales = "free_x")
+    tree_plot_data(object, !!!.other_data),
+    ...
+  ) +
+    ggplot2::facet_wrap(~ tree_id(nodes), scales = "free_x")
 }
 
 inv <- function(tree) {

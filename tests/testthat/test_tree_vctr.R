@@ -4,19 +4,22 @@ x <- matrix(rnorm(20), 5, 4)
 y <- matrix(rnorm(12, 4), 3, 4)
 z <- rbind(x, y)
 
-xtree <- as_tree_vctr(hclust(dist(x)))
-ytree <- as_tree_vctr(hclust(dist(y)))
+xtree <- tree_vctr(hclust(dist(x)))
+ytree <- tree_vctr(hclust(dist(y)))
 merged_tree <- c(xtree, ytree)
 
 test_that("individual trees have distinct factor levels", {
   expect_identical(
-    tree_id(xtree), rep(1L, 5)
+    tree_id(xtree),
+    rep(1L, 5)
   )
   expect_identical(
-    tree_id(ytree), rep(1L, 3)
+    tree_id(ytree),
+    rep(1L, 3)
   )
   expect_false(
-    levels(vctrs::field(xtree, "which_tree")) == levels(vctrs::field(ytree, "which_tree"))
+    levels(vctrs::field(xtree, "which_tree")) ==
+      levels(vctrs::field(ytree, "which_tree"))
   )
 })
 
@@ -43,7 +46,8 @@ test_that("merged contains", {
 test_that("subsetting removes unneeded trees", {
   tree_0 <- merged_tree[1:3]
   expect_identical(
-    tree_id(tree_0), rep(1L, 3)
+    tree_id(tree_0),
+    rep(1L, 3)
   )
   expect_true(
     length(trees(tree_0)) == 1
@@ -94,16 +98,13 @@ test_that("descendants are different based on encoding", {
   )
 })
 
-test_that(
-  "generate_inner_slice yields the same slices regardless of encoding",
-  {
-    expect_identical(
-      generate_inner_slice(xtree)$children,
-      generate_inner_slice(encode_obsv(xtree))$children
-    )
-    expect_identical(
-      generate_inner_slice(merged_tree)$children,
-      generate_inner_slice(encode_obsv(merged_tree))$children
-    )
-  }
-)
+test_that("generate_inner_slice yields the same slices regardless of encoding", {
+  expect_identical(
+    generate_inner_slice(xtree)$children,
+    generate_inner_slice(encode_obsv(xtree))$children
+  )
+  expect_identical(
+    generate_inner_slice(merged_tree)$children,
+    generate_inner_slice(encode_obsv(merged_tree))$children
+  )
+})
