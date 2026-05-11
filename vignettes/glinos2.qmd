@@ -55,6 +55,7 @@ stopifnot(all.equal(rownames(se), txps$TXNAME))
 exons <- exons[slice_indx]
 rownames(se) <- names(exons)
 rowData(se)$exons <- exons
+
 ```
 
 ```{r}
@@ -219,7 +220,10 @@ system.time({
   xp_inner <- group_by_nodes(res, rows(inner_nodes(nodes))) |>
     summarise(
       across(everything(), colSums),
-      rows(n_children = n()),
+      rows(
+        n_children = n(), gene_id = gene_id[1],
+        # storing exons
+        exons = list(exons)),
     )
 }) |>
   print()
@@ -248,6 +252,14 @@ rr <- rowRanges(se(res))
 rowRanges(se(res)) <- as(rr, "CompressedGRangesList")
 # for completeness, and so we can track the source
 # of each merge if we are curious later
+res <- res |> ungroup() |> mutate(
+  rows(
+    # converting CompressedGRangesList to a list of
+    # CompressedGRangesList
+    exons = as.list(exons) |>
+      lapply(\(r) relist(r, PartitioningByEnd(length(r))))
+  )
+)
 
 mcols(rr) <- NULL
 
@@ -332,7 +344,7 @@ strict <- climb_se |>
   ) |>
   dplyr::select(
     counts, old_counts,
-    rows(nodes, n_children, train_res),
+    rows(nodes, n_children, gene_id, exons, train_res),
     cols(everything())
   )
 
@@ -354,9 +366,11 @@ ord <- climb_se |>
   ) |>
   dplyr::select(
     counts, old_counts,
-    rows(nodes, n_children, train_res),
+    rows(nodes, n_children, gene_id, exons, train_res),
     cols(everything())
   )
+
+ord
 ```
 
 ```{r}
@@ -418,13 +432,119 @@ plot_data |>
   ggplot(aes(-log10(train_res.pvalue), -log10(pvalue))) +
   geom_point() +
   geom_abline(slope = 1, color = "red") +
-  geom_hline(yintercept = -log10(0.05), linetype = "dotted") +
-  geom_vline(xintercept = -log10(0.05), linetype = "dotted") +
+  geom_hline(yintercept = -log10(0.00001), linetype = "dotted") +
+  geom_vline(xintercept = -log10(0.00001), linetype = "dotted") +
   coord_fixed(ratio = 1, xlim = c(0, 90), ylim = c(0, 90))
 ```
 
 ```{r}
 
+multi_sig_trans <- dds_strict |>
+  # 'significant' transcripts
+  filter(rows(pvalue < 0.00001)) |>
+  group_by(rows(gene_id)) |>
+  filter(rows(n() > 1, any(n_children > 1))) |>
+  mutate(rows(.n = n())) |>
+  ungroup() |>
+  arrange(rows(dplyr::desc(.n), gene_id)) |>
+  mutate(rows(.n = NULL))
+  # pull(rows(gene_id))
+
+```
+
+```{r}
+
+.se_data <- climb_se |>
+  ungroup() |>
+  filter(rows(
+    gene_id == rowData(multi_sig_trans)$gene_id[1],
+    is_leaf(nodes))) |>
+  mutate(cols(
+    col_nodes = hclust(dist(t(.assays_asis$test))) |> tree_vctr()
+  ))
+
+
+
+plot_data <- .se_data |>
+  mutate(
+    rows(
+      train = .assays$train,
+      test = .assays$test,
+      col_tree = .cols$col_nodes,
+      condition = .cols$condition,
+      feature = .features,
+      sample = .cols$.samples
+    )
+  ) |>
+  dplyr::select(rows(nodes, exons, train:sample)) |>
+  rowData() |> tibble::as_tibble()
+
+
+hclust_plot <- tree_plot_data(all_nodes(tree_vctr(plot_data$nodes)))
+
+exon_data <- plot_data |>
+  dplyr::select(nodes, exons, feature) |>
+  mutate(
+    nodes = tree_vctr(nodes), #drop other trees
+    start = lapply(exons, \(r) start(unlist(r))),
+    end = lapply(exons, \(r) end(unlist(r))),
+    gstart = vapply(start, min, 1),
+    gend = vapply(end, max, 1),
+    exons = NULL
+  ) |>
+  tidyr::unnest(c(start, end)) |>
+  dplyr::left_join(hclust_plot, by = "nodes") |>
+  mutate(feature = factor(feature, levels = unique(feature)))
+
+ggplot(exon_data, aes(feature)) +
+  geom_segment(aes(y = gstart, yend = gend)) +
+  geom_rect(aes(width = 0.75, ymin = start, ymax = end), fill = "steelblue")
+```
+
+```{r}
+
+```
+
+```{r}
+library(ggside)
+main_data <- plot_data |>
+  dplyr::select(-c(exons, feature)) |>
+  tidyr::unnest(-nodes) |>
+  mutate(nodes = tree_vctr(nodes)) |>
+  dplyr::left_join(dplyr::select(exon_data, feature, nodes) |> dplyr::distinct(), by = "nodes") |>
+  dplyr::arrange(col_tree) |>
+  dplyr::mutate(sample = factor(sample, unique(sample)))
+
+.hclust_data <- hclust_plot |>
+  mutate(
+    across(starts_with("y"), ~ scales::rescale(.x, c(0, 1e4), c(0, 6100)) + 6307.3e4)
+  )
+.node_data <- dds_strict |>
+  ungroup() |>
+  # 'significant' transcripts
+  filter(rows(gene_id == rowData(multi_sig_trans)$gene_id[1])) |>
+  dplyr::select(rows(nodes, pvalue)) |>
+  rowData() |> tibble::as_tibble() |>
+  dplyr::left_join(.hclust_data, by = "nodes")
+
+hm <- ggplot(main_data, aes(x = feature, y = sample)) +
+  geom_tile(aes(fill = log10(test + 1))) +
+  geom_ysidetile(aes(x = "condition", yfill = condition)) +
+  guides(x = guide_axis(angle = 90)) +
+  geom_xsidesegment(aes(y = gstart, yend = gend), data = exon_data) +
+  geom_xsiderect(aes(x = feature, width = 0.75, xsideymin = start, xsideymax = end), fill = "steelblue", data = exon_data, inherit.aes = FALSE) +
+  theme(ggside.panel.scale.x = 2) +
+  geom_xsidepoint(aes(x = x, y = y), data = .hclust_data, color = "grey") +
+  geom_xsidesegment(aes(x = x, y = y, yend = y_end),
+    data = subset(.hclust_data, !is.na(y_end)), color = "grey") +
+  geom_xsidesegment(aes(x = x_start, y = y, xend = x_end),
+    data = subset(.hclust_data, !is.na(x_end)), color = "grey") +
+  scale_fill_viridis_c() +
+  geom_xsidepoint(aes(x = x, y = y, xcolor = -log10(pvalue)), data = .node_data)
+hm
+```
+
+```{r}
 .sig <- dds_strict |>
   #arbitrary contrary
   filter(rows(pvalue < 0.00001))
