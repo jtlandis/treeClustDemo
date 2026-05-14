@@ -39,7 +39,9 @@ stopifnot(
   "txps txid does not match" = match(txps$TXID, names(exons)) |>
     identical(seq_len(length(exons)))
 )
+```
 
+```{r}
 names(exons) <- dplyr::case_when(
   stringr::str_detect(txps$TXNAME, "ENST") ~ txps$TXNAME,
   TRUE ~ paste0(txps$GENEID, "-", stringr::str_sub(txps$TXNAME, 1, 8))
@@ -154,7 +156,9 @@ fmt_log <- function(nums, digits = 0) {
   sign[nums > 0] <- "+"
   sprintf(template, sign, abs(nums))
 }
+```
 
+```{r}
 #' @param object a dds object that had been predicted
 #' @param new_data a different dds object that will take the priors of `objec`
 #' @param coef string indicating the coef design to use for shrinkage
@@ -190,7 +194,7 @@ system.time({
   res <- dds |>
     new_plyxp() |>
     mutate(rows(
-      simple_exons = simple_range(exons),
+      exon_ranges = ranges(exons),
       n_children = 1L
     )) |>
     group_by(rows(gene_id)) |>
@@ -207,7 +211,7 @@ system.time({
     filter(rows(!is.na(cut_n_transcript))) |>
     mutate(
       rows(
-        nodes = cluster_data(simple_exons, similarity_method = "basepair") |>
+        nodes = cluster_tx_ranges(exon_ranges, similarity_method = "basepair") |>
           tree_vctr()
       )
     ) |>
@@ -429,12 +433,14 @@ plot_data |>
 
 ```{r}
 plot_data |>
+  mutate(node_status = dplyr::case_when(is_leaf(nodes) ~ "leaf", TRUE ~ "inner")) |>
   ggplot(aes(-log10(train_res.pvalue), -log10(pvalue))) +
   geom_point() +
   geom_abline(slope = 1, color = "red") +
   geom_hline(yintercept = -log10(0.00001), linetype = "dotted") +
   geom_vline(xintercept = -log10(0.00001), linetype = "dotted") +
-  coord_fixed(ratio = 1, xlim = c(0, 90), ylim = c(0, 90))
+  coord_fixed(ratio = 1, xlim = c(0, 90), ylim = c(0, 90)) +
+  facet_grid(cols = vars(node_status))
 ```
 
 ```{r}
@@ -472,6 +478,7 @@ plot_data <- .se_data |>
       test = .assays$test,
       col_tree = .cols$col_nodes,
       condition = .cols$condition,
+      donor = .cols$donor,
       feature = .features,
       sample = .cols$.samples
     )
@@ -496,9 +503,9 @@ exon_data <- plot_data |>
   dplyr::left_join(hclust_plot, by = "nodes") |>
   mutate(feature = factor(feature, levels = unique(feature)))
 
-ggplot(exon_data, aes(feature)) +
-  geom_segment(aes(y = gstart, yend = gend)) +
-  geom_rect(aes(width = 0.75, ymin = start, ymax = end), fill = "steelblue")
+# ggplot(exon_data, aes(feature)) +
+#   geom_segment(aes(y = gstart, yend = gend)) +
+#   geom_rect(aes(width = 0.75, ymin = start, ymax = end), fill = "steelblue")
 ```
 
 ```{r}
@@ -517,7 +524,7 @@ main_data <- plot_data |>
 
 .hclust_data <- hclust_plot |>
   mutate(
-    across(starts_with("y"), ~ scales::rescale(.x, c(0, 1e4), c(0, 6100)) + 6307.3e4)
+    across(starts_with("y"), ~ scales::rescale(.x, c(0, 3e4), c(0, 6100)) + 6307.3e4)
   )
 .node_data <- dds_strict |>
   ungroup() |>
@@ -530,18 +537,43 @@ main_data <- plot_data |>
 hm <- ggplot(main_data, aes(x = feature, y = sample)) +
   geom_tile(aes(fill = log10(test + 1))) +
   geom_ysidetile(aes(x = "condition", yfill = condition)) +
-  guides(x = guide_axis(angle = 90)) +
+  geom_ysidetile(aes(x = "donor", yfill = donor)) +
   geom_xsidesegment(aes(y = gstart, yend = gend), data = exon_data) +
   geom_xsiderect(aes(x = feature, width = 0.75, xsideymin = start, xsideymax = end), fill = "steelblue", data = exon_data, inherit.aes = FALSE) +
-  theme(ggside.panel.scale.x = 2) +
   geom_xsidepoint(aes(x = x, y = y), data = .hclust_data, color = "grey") +
   geom_xsidesegment(aes(x = x, y = y, yend = y_end),
     data = subset(.hclust_data, !is.na(y_end)), color = "grey") +
   geom_xsidesegment(aes(x = x_start, y = y, xend = x_end),
     data = subset(.hclust_data, !is.na(x_end)), color = "grey") +
   scale_fill_viridis_c() +
-  geom_xsidepoint(aes(x = x, y = y, xcolor = -log10(pvalue)), data = .node_data)
+  geom_xsidepoint(aes(x = x, y = y, xcolor = -log10(pvalue)), data = .node_data) +
+  theme_minimal() +
+  scale_x_discrete(labels = \(x) ifelse(grepl("^ENST", x = x), "", x)) +
+  scale_y_discrete(labels = \(x)ifelse(grepl("^GTEX", x = x), "", x)) +
+  scale_color_viridis_c(option = "C", aesthetics = "xcolour", guide = guide_colorbar(available_aes = "xcolour")) +
+  scale_xsidey_continuous(
+    labels = \(x) {
+      if (any(grepl("^6", x = x))) {
+        nums <- as.numeric(x)
+        hist_labs <- nums >= 6307.3e4
+        x[hist_labs] <- scales::rescale(nums[hist_labs], to = c(0, 6100), from = 6307.3e4 + c(0, 3e4)) |> round() |> as.character()
+      }
+      x
+    }, breaks = c(6304e4 + (0:3 * 1e4), 6307.3e4 + (0:3 * 1e4))
+  ) +
+  theme(
+    ggside.panel.scale.x = 3,
+    ggside.panel.grid = element_blank()) +
+  guides(x = guide_axis(angle = 45)) +
+  scale_fill_brewer(aesthetics = c("yfill"), palette = "Paired") +
+  labs(x = "Transcript",
+    y = sprintf("Sample%sGenomic Position%sCluster Height",
+      paste(rep(" ", 30), collapse = ""), paste(rep(" ", 20), collapse = "")),
+    yfill = "Sample ID")
 hm
+
+ggplot2::ggsave(filename = "Example_Climb_Res.png", plot = hm, width = 6, height = 7, units = "in")
+
 ```
 
 ```{r}
