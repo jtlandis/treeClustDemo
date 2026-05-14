@@ -1,3 +1,9 @@
 *.html
 *.R
 *_files
+*.rds
+*.gz
+*.sqlite
+
+/.quarto/
+**/*.quarto_ipynb
