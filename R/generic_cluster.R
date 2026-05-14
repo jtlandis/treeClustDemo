@@ -10,7 +10,6 @@
 #   suppressMessages()
 # ## classes ----
 
-
 ## Generics ----
 
 #' @importFrom S7 S7_dispatch
@@ -28,17 +27,20 @@ NULL
 cluster_data <- new_generic(
   "cluster_data",
   "data",
-  fun = function(data,
-                 similarity_method = c(
-                   "basepair",
-                   "basepair_sorensen",
-                   "basepair_max-union",
-                   "percent",
-                   "percent_sorensen",
-                   "percent_max-union"
-                 ),
-                 dist_method = "euclidean",
-                 clust_method = "complete", name = NULL) {
+  fun = function(
+    data,
+    similarity_method = c(
+      "basepair",
+      "basepair_sorensen",
+      "basepair_max-union",
+      "percent",
+      "percent_sorensen",
+      "percent_max-union"
+    ),
+    dist_method = "euclidean",
+    clust_method = "complete",
+    name = NULL
+  ) {
     S7_dispatch()
   }
 )
@@ -48,10 +50,19 @@ cluster_data <- new_generic(
 plot_cluster <- new_generic(
   "plot_cluster",
   "data",
-  fun = function(data,
-                 similarity_method = c("basepair_sorensen", "basepair_max_union", "basepair", "exon_sorensen", "exon"),
-                 dist_method = "euclidean",
-                 clust_method = "complete", name = NULL) {
+  fun = function(
+    data,
+    similarity_method = c(
+      "basepair_sorensen",
+      "basepair_max_union",
+      "basepair",
+      "exon_sorensen",
+      "exon"
+    ),
+    dist_method = "euclidean",
+    clust_method = "complete",
+    name = NULL
+  ) {
     S7_dispatch()
   }
 )
@@ -74,9 +85,10 @@ sorensen_scale <- function(mat) {
   n_per_col <- Matrix::colSums(logic_mat)
 
   mat_dims <- mat
-  mat_dims[logic_mat] <- vctrs::vec_rep(diag_vec, n_per_col)
+  mat_dims[logic_mat] <- rep(diag_vec, n_per_col)
 
-  mat[logic_mat] <- 2 * mat[logic_mat] /
+  mat[logic_mat] <- 2 *
+    mat[logic_mat] /
     (Matrix_outer(mat_dims, `+`)[logic_mat])
 
   mat
@@ -89,7 +101,7 @@ max_scale <- function(mat) {
   n_per_col <- Matrix::colSums(logic_mat)
 
   mat_dims <- mat
-  mat_dims[logic_mat] <- vctrs::vec_rep(diag_vec, n_per_col)
+  mat_dims[logic_mat] <- rep(diag_vec, n_per_col)
 
   mat[logic_mat] <- mat[logic_mat] /
     (Matrix_outer(mat_dims, function(x, y) {
@@ -116,7 +128,7 @@ with_exons <- function(list_obj, with) {
 }
 
 compute_simi <- function(object, with) {
-  if (methods::is(object, "list")) {
+  if (methods::is(object, "list") || methods::is(object, "List")) {
     mat <- with_exons(object, with = with)
   } else {
     mat <- with(object)
@@ -169,8 +181,10 @@ similarity_opts <- c(
 
 parse_method_opt <- function(method_name) {
   nn <- length(method_name)
-  if (nn == length(similarity_opts) &&
-    all.equal(method_name, similarity_opts)) {
+  if (
+    nn == length(similarity_opts) &&
+      all.equal(method_name, similarity_opts)
+  ) {
     return(method_name[1])
   }
   if (nn != 1L) {
@@ -193,7 +207,8 @@ parse_method_opt <- function(method_name) {
 }
 
 select_method <- function(method_name) {
-  switch(nm <- parse_method_opt(method_name),
+  switch(
+    nm <- parse_method_opt(method_name),
     basepair = bp_simi_width,
     basepair_sorensen = bp_sorensen_width,
     `basepair_max-union` = bp_max_union_width,
@@ -204,7 +219,27 @@ select_method <- function(method_name) {
   )
 }
 
-cluster_data_default <- function(
+#' @title Cluster Transcript Ranges
+#' @param data any object that supports `IRanges::start` and `IRanges::end`
+#' @param similarity_method controls the method that produces the
+#'  input to `stats::hclust(stats::dist(input))`. One of
+#' 'basepair', 'percent'. See details for additional options.
+#' @param dist_method method to provide to `stats::dist`
+#' @param clust_method method to provide to `stats::hclust`
+#'
+#' ## Details
+#'
+#'
+#' 'basepair' option will use the pairwise intersection of ranges
+#' as the similarity input. 'percent' will take the pairwise
+#' intersection over the union of ranges as the similarity input.
+#'
+#' You may extend either method with a postfix of either
+#' "_sorensen" or "_max-union". This augements how the similarity
+#' measure is calculated.
+#'
+#' @export
+cluster_tx_ranges <- function(
   data,
   similarity_method = c(
     "basepair",
@@ -215,10 +250,12 @@ cluster_data_default <- function(
     "percent_max-union"
   ),
   dist_method = "euclidean",
-  clust_method = "complete", name = NULL
+  clust_method = "complete",
+  name = NULL
 ) {
   simi_fun <- select_method(similarity_method)
-  dist_mat <- dist(simi_fun(data), method = dist_method)
+  simi_mat <- simi_fun(data)
+  dist_mat <- dist(simi_mat, method = dist_method)
   clust <- hclust(dist_mat, method = clust_method)
   clust
 }
@@ -226,7 +263,7 @@ cluster_data_default <- function(
 S7::method(
   cluster_data,
   S7::new_union(GR, GRL, class_simple_range, class_nested_range)
-) <- cluster_data_default
+) <- cluster_tx_ranges
 
 S7::method(
   cluster_data,
@@ -242,7 +279,8 @@ S7::method(
     "percent_max-union"
   ),
   dist_method = "euclidean",
-  clust_method = "complete", name = NULL
+  clust_method = "complete",
+  name = NULL
 ) {
   cluster_data_default(
     SummarizedExperiment::rowRanges(data),
@@ -251,7 +289,6 @@ S7::method(
     clust_method = clust_method
   )
 }
-
 
 # method(plot_cluster, GR) <-
 #   function(data,
