@@ -13,13 +13,12 @@ GRL <- methods::getClass("GenomicRangesList", where = "GenomicRanges")
 
 #' @rdname supported_classes
 #' @export
-SE <- methods::getClass("SummarizedExperiment",
-  where = "SummarizedExperiment"
-)
+SE <- methods::getClass("SummarizedExperiment", where = "SummarizedExperiment")
 
 #' @rdname supported_classes
 #' @export
-RSE <- methods::getClass("RangedSummarizedExperiment",
+RSE <- methods::getClass(
+  "RangedSummarizedExperiment",
   where = "SummarizedExperiment"
 )
 
@@ -33,13 +32,20 @@ class_nested_range <- S7::new_S3_class("nested_range")
 s4_simple_range <- methods::setOldClass("simple_range")
 
 
-new_simple_range <- function(start = integer(), stop = integer(), names = NULL) {
+new_simple_range <- function(
+  start = integer(),
+  stop = integer(),
+  names = NULL
+) {
   vctrs::new_rcrd(
-    Filter(Negate(is.null), list(
-      start = start,
-      stop = stop,
-      NAMES = names
-    )),
+    Filter(
+      Negate(is.null),
+      list(
+        start = start,
+        stop = stop,
+        NAMES = names
+      )
+    ),
     class = "simple_range"
   )
 }
@@ -139,3 +145,55 @@ methods::setMethod(
     vctrs::field(x, "stop")
   }
 )
+
+S7::method(
+  list_unchop,
+  list(methods::getClass("CompressedList"), NULL)
+) <- function(x, ptype, ..., indices = NULL) {
+  unlistData <- unlist(x)
+  data_class <- class(unlistData)
+  slice_ <- methods::selectMethod(
+    "[",
+    c(x = data_class, i = "integer", j = "missing", drop = "missing")
+  )
+
+  if (!is.null(indices)) {
+    lens_x <- lengths(x)
+    lens_i <- lengths(indices)
+    if (!all(res <- lens_x == lens_i | lens_x == 1)) {
+      failure <- which(!res)[1]
+      stop(
+        sprintf(
+          "Can't recycle `x[[%i]]` (size %i) to size %i",
+          failure,
+          lens_x[failure],
+          lens_i[failure]
+        )
+      )
+    }
+    unlistData <- slice_(unlistData, vctrs::list_unchop(indices))
+  }
+  unlistData
+}
+
+
+S7::method(
+  list_unchop,
+  list(S7::class_list, methods::getClass("CompressedList"))
+) <- function(x, ptype, ..., indices = NULL) {
+  unlistData <- do.call("c", lapply(x, unlist))
+  widths <- lapply(x, lengths)
+  ends <- cumsum(vctrs::list_unchop(widths))
+  if (!is.null(indices)) {
+    part <- IRanges::PartitioningByEnd(ends)
+    start <- IRanges::start(part)
+    end <- IRanges::end(part)
+    ends <- vctrs::list_unchop(widths, indices = indices) |>
+      cumsum()
+    ord <- order(vctrs::list_unchop(indices))
+    slice_i <- vctrs::list_unchop(Map(\(s, e) s:e, s = start, e = end)[ord])
+    unlistData <- unlistData[slice_i]
+  }
+
+  relist(unlistData, skeleton = IRanges::PartitioningByEnd(ends))
+}
