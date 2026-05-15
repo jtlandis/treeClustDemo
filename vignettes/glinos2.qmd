@@ -524,7 +524,7 @@ main_data <- plot_data |>
 
 .hclust_data <- hclust_plot |>
   mutate(
-    across(starts_with("y"), ~ scales::rescale(.x, c(0, 3e4), c(0, 6100)) + 6307.3e4)
+    across(starts_with("y"), ~ scales::rescale(.x, c(0, 3e4), c(6100, 0)) + 6300.7e4)
   )
 .node_data <- dds_strict |>
   ungroup() |>
@@ -534,45 +534,50 @@ main_data <- plot_data |>
   rowData() |> tibble::as_tibble() |>
   dplyr::left_join(.hclust_data, by = "nodes")
 
-hm <- ggplot(main_data, aes(x = feature, y = sample)) +
+hm <- ggplot(main_data, aes(x = sample, y = feature)) +
   geom_tile(aes(fill = log10(test + 1))) +
-  geom_ysidetile(aes(x = "condition", yfill = condition)) +
-  geom_ysidetile(aes(x = "donor", yfill = donor)) +
-  geom_xsidesegment(aes(y = gstart, yend = gend), data = exon_data) +
-  geom_xsiderect(aes(x = feature, width = 0.75, xsideymin = start, xsideymax = end), fill = "steelblue", data = exon_data, inherit.aes = FALSE) +
-  geom_xsidepoint(aes(x = x, y = y), data = .hclust_data, color = "grey") +
-  geom_xsidesegment(aes(x = x, y = y, yend = y_end),
+  geom_xsidetile(aes(y = "condition", xfill = condition)) +
+  geom_xsidetile(aes(y = "donor", xfill = donor)) +
+  geom_ysidesegment(aes(x = gstart, xend = gend), data = exon_data) +
+  geom_ysiderect(aes(y = feature, height = 0.75, ysidexmin = start, ysidexmax = end), fill = "steelblue", data = exon_data, inherit.aes = FALSE) +
+  geom_ysidepoint(aes(x = y, y = x), data = .hclust_data, color = "grey") +
+  geom_ysidesegment(aes(y = x, x = y, xend = y_end),
     data = subset(.hclust_data, !is.na(y_end)), color = "grey") +
-  geom_xsidesegment(aes(x = x_start, y = y, xend = x_end),
+  geom_ysidesegment(aes(y = x_start, x = y, yend = x_end),
     data = subset(.hclust_data, !is.na(x_end)), color = "grey") +
   scale_fill_viridis_c() +
-  geom_xsidepoint(aes(x = x, y = y, xcolor = -log10(pvalue)), data = .node_data) +
+  geom_ysidepoint(aes(y = x, x = y, ycolor = -log10(pvalue)), data = .node_data) +
   theme_minimal() +
-  scale_x_discrete(labels = \(x) ifelse(grepl("^ENST", x = x), "", x)) +
-  scale_y_discrete(labels = \(x)ifelse(grepl("^GTEX", x = x), "", x)) +
-  scale_color_viridis_c(option = "C", aesthetics = "xcolour", guide = guide_colorbar(available_aes = "xcolour")) +
-  scale_xsidey_continuous(
+  scale_y_discrete(labels = \(x) ifelse(grepl("^ENST", x = x), "", x)) +
+  scale_x_discrete(labels = \(x)ifelse(grepl("^GTEX", x = x), "", x)) +
+  scale_color_viridis_c(option = "C", aesthetics = "ycolour", guide = guide_colorbar(available_aes = "ycolour")) +
+  scale_ysidex_continuous(
     labels = \(x) {
       if (any(grepl("^6", x = x))) {
+        # browser()
         nums <- as.numeric(x)
-        hist_labs <- nums >= 6307.3e4
-        x[hist_labs] <- scales::rescale(nums[hist_labs], to = c(0, 6100), from = 6307.3e4 + c(0, 3e4)) |> round() |> as.character()
+        hist_labs <- nums < 6304e4
+        x[hist_labs] <- scales::rescale(nums[hist_labs], to = c(6100, 0), from = 6300.7e4 + c(0, 3e4)) |> round() |> as.character()
       }
       x
-    }, breaks = c(6304e4 + (0:3 * 1e4), 6307.3e4 + (0:3 * 1e4))
+    }, breaks = c(6300.7e4 + (0:3 * 1e4), 6304e4 + (0:3 * 1e4))
   ) +
   theme(
-    ggside.panel.scale.x = 3,
-    ggside.panel.grid = element_blank()) +
-  guides(x = guide_axis(angle = 45)) +
-  scale_fill_brewer(aesthetics = c("yfill"), palette = "Paired") +
-  labs(x = "Transcript",
-    y = sprintf("Sample%sGenomic Position%sCluster Height",
-      paste(rep(" ", 30), collapse = ""), paste(rep(" ", 20), collapse = "")),
-    yfill = "Sample ID")
+    ggside.panel.scale.y = 3, panel.grid = element_blank(),
+    ggside.panel.grid = element_blank(), legend.position = "top", ggside.axis.ticks = element_line(), legend.title = element_text(vjust = .5)) +
+  guides(
+    x = guide_axis(angle = 45),
+    fill = guide_colourbar(order = 4, theme = theme(legend.title = element_text(vjust = .8))),
+    ycolour = guide_colourbar(available_aes = "ycolour", order = 1, theme = theme(legend.title = element_text(vjust = .8)))) +
+  scale_fill_brewer(aesthetics = c("xfill"), palette = "Paired") +
+  labs(y = "Transcript",
+    x = sprintf("Cluster Height%sGenomic Position%sSample",
+      paste(rep(" ", 50), collapse = ""), paste(rep(" ", 60), collapse = "")),
+    xfill = "Sample ID") +
+  ggside(y.pos = "left", respect_side_labels = "y")
 hm
 
-ggplot2::ggsave(filename = "Example_Climb_Res.png", plot = hm, width = 6, height = 7, units = "in")
+ggplot2::ggsave(filename = "Example_Climb_Res.png", plot = hm, width = 7, height = 6, units = "in")
 
 ```
 
